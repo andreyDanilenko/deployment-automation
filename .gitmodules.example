@@ -1,0 +1,25 @@
+# Пример конфигурации Git Submodules
+# Скопируйте этот файл в .gitmodules и добавьте ваши проекты
+
+[submodule "projects/project1"]
+    path = projects/project1
+    url = https://github.com/your-org/project1.git
+    branch = main
+
+[submodule "projects/project2"]
+    path = projects/project2
+    url = https://github.com/your-org/project2.git
+    branch = main
+
+# Пример для текущего проекта (если вынесли в отдельные репозитории)
+# [submodule "projects/frontend"]
+#     path = projects/frontend
+#     url = https://github.com/your-org/frontend.git
+#     branch = main
+#
+# [submodule "projects/backend"]
+#     path = projects/backend
+#     url = https://github.com/your-org/backend.git
+#     branch = main
+
+
