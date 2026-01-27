@@ -1,10 +1,12 @@
 version: '3.8'
 
-# Docker Compose конфигурация для развертывания api-project-marketplace
+# Docker Compose конфигурация для централизованного деплоя
 # 
-# Структура на сервере:
-# - /root/project/api-project-marketplace/ - админ-панель (монорепа)
-# - /root/project/deployment/ - этот репозиторий (nginx, docker-compose)
+# Предполагаемая структура на сервере:
+# - /root/project/admin-panel-golang/  - репозиторий админ-панели
+# - /root/project/backend/             - репозиторий backend-приложения (erp.lifedream.tech)
+# - /root/project/frontend/            - репозиторий frontend-приложения (erp.lifedream.tech)
+# - /root/project/deployment/          - этот репозиторий (nginx, docker-compose)
 
 services:
   # Nginx reverse proxy
@@ -28,13 +30,13 @@ services:
   # Admin Panel (admin-panel-golang) - lifedream.tech
   admin-panel:
     build:
-      context: ../api-project-marketplace/app
+      context: ../admin-panel-golang/app
       dockerfile: Dockerfile
     container_name: admin-panel-app
     environment:
       - PORT=8080
     volumes:
-      - ../api-project-marketplace/app:/app
+      - ../admin-panel-golang/app:/app
     restart: unless-stopped
     networks:
       - app-network
