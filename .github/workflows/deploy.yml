@@ -36,6 +36,6 @@ jobs:
             
             # Запускаем деплой (обновит api-project-marketplace и перезапустит контейнеры)
             echo "Запускаем деплой..."
-            bash scripts/deploy.sh || exit 1
+            bash ../scripts/deploy.sh || exit 1
             
             echo "Деплой инфраструктуры завершён успешно!"
