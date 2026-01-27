@@ -1,13 +1,10 @@
 version: '3.8'
 
-# Docker Compose конфигурация для развертывания проектов
+# Docker Compose конфигурация для развертывания api-project-marketplace
 # 
-# Текущая структура: проекты в соседних папках (../frontend, ../backend)
-# Для работы с Git Submodules см. docker-compose.example.yml
-#
-# Структура путей:
-# - ../frontend, ../backend - текущая структура (проекты в соседних папках)
-# - ./projects/project1/frontend - структура с Git Submodules
+# Структура на сервере:
+# - /root/project/api-project-marketplace/ - админ-панель (монорепа)
+# - /root/project/deployment/ - этот репозиторий (nginx, docker-compose)
 
 services:
   # Nginx reverse proxy
@@ -23,87 +20,43 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - ./nginx/logs:/var/log/nginx
     depends_on:
-      - frontend
-      - backend
+      - admin-panel
     restart: unless-stopped
     networks:
       - app-network
 
-  # Frontend service
-  frontend:
+  # Admin Panel (admin-panel-golang) - lifedream.tech
+  admin-panel:
     build:
-      # context - это ПУТЬ к директории на диске, НЕ URL репозитория!
-      # URL репозитория указывается только при: git submodule add <URL> <path>
-      # 
-      # Пример: если репозиторий называется "my-awesome-frontend-app",
-      # но вы добавили его как: git submodule add <URL> projects/frontend
-      # то здесь указываете: context: ./projects/frontend
-      #
-      # Название папки submodule может быть любым и не обязательно
-      # совпадает с названием репозитория!
-      context: ../frontend
+      context: ../api-project-marketplace/app
       dockerfile: Dockerfile
-    container_name: frontend-app
+    container_name: admin-panel-app
     environment:
-      - VITE_API_BASE_URL=http://backend:8080
+      - PORT=8080
     volumes:
-      - ../frontend:/app
-      - /app/node_modules
+      - ../api-project-marketplace/app:/app
     restart: unless-stopped
     networks:
       - app-network
-
-  # Backend service
-  backend:
-    build:
-      # context - это ПУТЬ к директории на диске, НЕ URL репозитория!
-      # URL репозитория указывается только при: git submodule add <URL> <path>
-      #
-      # Пример: если репозиторий называется "super-backend-api",
-      # но вы добавили его как: git submodule add <URL> projects/backend
-      # то здесь указываете: context: ./projects/backend
-      #
-      # Название папки submodule может быть любым и не обязательно
-      # совпадает с названием репозитория!
-      context: ../backend
-      dockerfile: Dockerfile
-    container_name: backend-api
-    environment:
-      - SERVER_PORT=8080
-      - SERVER_HOST=0.0.0.0
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=app_db
-    ports:
-      - "8080:8080"
-    volumes:
-      - ../backend:/app
     depends_on:
-      - postgres
-    restart: unless-stopped
-    networks:
-      - app-network
+      - postgres-admin
 
-  # PostgreSQL database
-  postgres:
+  # PostgreSQL database для admin-panel
+  postgres-admin:
     image: postgres:16-alpine
-    container_name: postgres-db
+    container_name: postgres-admin-db
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=app_db
+      - POSTGRES_DB=admin_panel_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+      - postgres_admin_data:/var/lib/postgresql/data
     restart: unless-stopped
     networks:
       - app-network
 
 volumes:
-  postgres_data:
+  postgres_admin_data:
 
 networks:
   app-network:
