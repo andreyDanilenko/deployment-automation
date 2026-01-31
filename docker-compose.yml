@@ -1,67 +1,51 @@
 version: '3.8'
-# 
-# Предполагаемая структура на сервере:
-# - /root/project/admin-panel-golang/  - репозиторий админ-панели
-# - /root/project/backend/             - репозиторий backend-приложения (erp.lifedream.tech)
-# - /root/project/frontend/            - репозиторий frontend-приложения (erp.lifedream.tech)
-# - /root/project/deployment/          - этот репозиторий (nginx, docker-compose)
 
 services:
-  # Nginx reverse proxy
+  postgres:
+    container_name: auth_service_db
+    image: postgres:17.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: my_pass
+      POSTGRES_DB: auth_service
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    container_name: auth_service_app
+    build:
+      context: ../admin-panel-golang/app
+      dockerfile: Dockerfile
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres
+      DB_USER: postgres
+      DB_PASSWORD: my_pass
+      DB_NAME: auth_service
+      DB_PORT: 5432
+
   nginx:
     build:
       context: ../admin-panel-golang/client
       dockerfile: Dockerfile
-    container_name: nginx-proxy
+    container_name: auth_service_nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/ssl:/etc/nginx/ssl:ro
-      - ./nginx/logs:/var/log/nginx
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
-      - admin-panel
+      - app
     restart: unless-stopped
-    networks:
-      - app-network
 
-  # Admin Panel (admin-panel-golang) - lifedream.tech
-  admin-panel:
-    build:
-      context: ../admin-panel-golang/app
-      dockerfile: Dockerfile
-    container_name: admin-panel-app
-    environment:
-      - PORT=8080
-    volumes:
-      - ../admin-panel-golang/app:/app
-    restart: unless-stopped
-    networks:
-      - app-network
-    depends_on:
-      - postgres-admin
-
-  # PostgreSQL database для admin-panel
-  postgres-admin:
-    image: postgres:16-alpine
-    container_name: postgres-admin-db
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=admin_panel_db
-    volumes:
-      - postgres_admin_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    networks:
-      - app-network
 
 volumes:
-  postgres_admin_data:
-
-networks:
-  app-network:
-    driver: bridge
-
-
-
+  postgres_data:
