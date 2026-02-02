@@ -22,24 +22,46 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.DEPLOY_SECRET_KEY }}
           script: |
-            cd /root/project/deployment || exit 1
-            
-            # Настройка SSH для работы с GitHub
+
+            mkdir -p /root/project/deployment
+  
+            # Переходим в неё
+            cd /root/project/deployment
+
             eval "$(ssh-agent -s)"
             ssh-add ~/.ssh/github_keys || true
             
-            # Обновляем текущий репозиторий инфраструктуры (если это git-репозиторий)
-            if [ -d .git ]; then
-              echo "Обновляем репозиторий инфраструктуры..."
-              git fetch --all
-              git checkout master 2>/dev/null || git checkout main
-              git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
-            else
-              echo "Предупреждение: /root/project/deployment не является git-репозиторием. Клонируйте репозиторий для автообновления."
+            # Если папка пустая — клонируем
+            if [ ! -d .git ]; then
+              echo "Клонируем репозиторий..."
+              git clone git@github.com:ваш-аккаунт/ваш-репозиторий.git .
             fi
             
-            # Запускаем деплой (обновит api-project-marketplace и перезапустит контейнеры)
-            echo "Запускаем деплой..."
-            bash scripts/deploy.sh || exit 1
+            # Обновляем код
+            git fetch --all
+            git checkout master 2>/dev/null || git checkout main
+            git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
             
-            echo "Деплой инфраструктуры завершён успешно!"
+            # Запускаем деплой
+            bash scripts/deploy.sh
+            # cd /root/project/deployment || exit 1
+            
+            # # Настройка SSH для работы с GitHub
+            # eval "$(ssh-agent -s)"
+            # ssh-add ~/.ssh/github_keys || true
+            
+            # # Обновляем текущий репозиторий инфраструктуры (если это git-репозиторий)
+            # if [ -d .git ]; then
+            #   echo "Обновляем репозиторий инфраструктуры..."
+            #   git fetch --all
+            #   git checkout master 2>/dev/null || git checkout main
+            #   git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
+            # else
+            #   echo "Предупреждение: /root/project/deployment не является git-репозиторием. Клонируйте репозиторий для автообновления."
+            # fi
+            
+            # # Запускаем деплой (обновит api-project-marketplace и перезапустит контейнеры)
+            # echo "Запускаем деплой..."
+            # bash scripts/deploy.sh || exit 1
+            
+            # echo "Деплой инфраструктуры завершён успешно!"
