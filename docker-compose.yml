@@ -17,7 +17,7 @@ services:
   app:
     container_name: auth_service_app
     build:
-      context: ../admin-panel-golang/app
+      context: ../go-angular-pg/app
       dockerfile: Dockerfile
     ports:
       - "8081:8080"
@@ -33,7 +33,7 @@ services:
 
   nginx:
     build:
-      context: ../admin-panel-golang/client
+      context: ../go-angular-pg/client
       dockerfile: Dockerfile
     container_name: auth_service_nginx
     ports:

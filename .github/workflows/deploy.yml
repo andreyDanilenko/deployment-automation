@@ -46,3 +46,13 @@ jobs:
               rm -rf ./* 2>/dev/null || true
               git clone https://github.com/andreyDanilenko/deployment-automation.git .
             fi
+
+                  echo "=== Деплой приложения ==="
+            if [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ]; then
+              docker-compose down
+              docker-compose up -d --build
+              echo "✅ Контейнеры перезапущены"
+            else
+              echo "⚠️ docker-compose.yml не найден. Проверяем структуру:"
+              ls -la
+            fi
