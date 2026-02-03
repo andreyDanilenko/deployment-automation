@@ -36,7 +36,6 @@ services:
       - app-network
     restart: unless-stopped
 
-  # Project 1 - Backend
   project1-backend:
     build:
       context: ./projects/project1/backend
@@ -55,26 +54,6 @@ services:
     depends_on:
       - postgres
     restart: unless-stopped
-
-  # Project 2 - Frontend (пример)
-  # project2-frontend:
-  #   build:
-  #     context: ./projects/project2/frontend
-  #     dockerfile: Dockerfile
-  #   container_name: project2-frontend
-  #   networks:
-  #     - app-network
-  #   restart: unless-stopped
-
-  # Project 2 - Backend (пример)
-  # project2-backend:
-  #   build:
-  #     context: ./projects/project2/backend
-  #     dockerfile: Dockerfile
-  #   container_name: project2-backend
-  #   networks:
-  #     - app-network
-  #   restart: unless-stopped
 
   # Shared PostgreSQL (или отдельная БД для каждого проекта)
   postgres:
