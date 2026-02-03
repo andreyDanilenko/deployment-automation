@@ -10,7 +10,6 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -18,55 +17,65 @@ jobs:
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
-
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.DEPLOY_SECRET_KEY }}
           script: |
+            echo "=== Начало деплоя ==="
+            
             # Переходим в папку проекта
-            cd /root/project/deployment || mkdir -p /root/project/deployment && cd /root/project/deployment
-            
-            echo "=== Настраиваем SSH и known_hosts ==="
-            
-            # КРИТИЧНО: Добавляем GitHub в known_hosts
-            mkdir -p ~/.ssh
-            ssh-keyscan -t rsa,ecdsa,ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
-            
-            # Настройка SSH для работы с GitHub
-            eval "$(ssh-agent -s)"
-            ssh-add ~/.ssh/github_keys
-            
-            # Проверяем подключение
-            ssh -T git@github.com || echo "SSH проверка выполнена"
+            cd /root/project/deployment
             
             echo "=== Обновляем репозиторий deployment ==="
             
-            # ЕСЛИ ПАПКА ПУСТАЯ - КЛОНИРУЕМ
+            # Если папка пустая - клонируем
             if [ ! -d ".git" ]; then
               echo "❌ Git репозиторий не найден. Клонируем..."
-              rm -rf ./* 2>/dev/null || true
               git clone https://github.com/andreyDanilenko/deployment-automation.git .
             else
               echo "✅ Git репозиторий найден. Обновляем..."
+              # Сохраняем важные файлы которые не в git
+              if [ -f ".env" ]; then
+                cp .env /tmp/.env.backup
+                echo "✅ .env файл сохранен"
+              fi
+              
+              # Обновляем код
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
-              git pull origin master 2>/dev/null || git pull origin main
+              git pull origin master 2>/dev/null || git pull origin/main
+              
+              # Восстанавливаем .env если был
+              if [ -f "/tmp/.env.backup" ]; then
+                mv /tmp/.env.backup .env
+                echo "✅ .env файл восстановлен"
+              fi
             fi
             
             echo "=== Проверяем изменения ==="
             git log --oneline -3
-            echo "Текущая ветка: $(git branch --show-current)"
             
-            echo "=== Деплой приложения ==="
+            echo "=== Запускаем контейнеры ==="
             if [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ]; then
-              # Показываем что в docker-compose
-              echo "Содержимое docker-compose.yml:"
-              head -20 docker-compose.yml
+              # ВАЖНО: Используем только stop/start вместо down/up
+              # чтобы не удалять volumes и сети
               
-              docker-compose down
-              docker-compose up -d --build
-              echo "✅ Контейнеры перезапущены"
+              echo "Останавливаем контейнеры..."
+              docker-compose stop || true
+              
+              echo "Скачиваем обновленные образы..."
+              docker-compose pull || true
+              
+              echo "Запускаем контейнеры..."
+              docker-compose up -d
+              
+              echo "Проверяем статус..."
+              docker-compose ps
+              echo "✅ Контейнеры обновлены и запущены"
             else
-              echo "⚠️ docker-compose.yml не найден. Проверяем структуру:"
+              echo "⚠️ docker-compose.yml не найден"
               ls -la
             fi
+            
+            echo "=== Проверяем volume ==="
+            docker volume ls | grep postgres_data
