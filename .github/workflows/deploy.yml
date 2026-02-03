@@ -39,16 +39,30 @@ jobs:
             # Проверяем подключение
             ssh -T git@github.com || echo "SSH проверка выполнена"
             
-            echo "=== Проверяем состояние папки ==="
+            echo "=== Обновляем репозиторий deployment ==="
             
+            # ЕСЛИ ПАПКА ПУСТАЯ - КЛОНИРУЕМ
             if [ ! -d ".git" ]; then
               echo "❌ Git репозиторий не найден. Клонируем..."
               rm -rf ./* 2>/dev/null || true
               git clone https://github.com/andreyDanilenko/deployment-automation.git .
+            else
+              echo "✅ Git репозиторий найден. Обновляем..."
+              git fetch --all
+              git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
+              git pull origin master 2>/dev/null || git pull origin main
             fi
-
-                  echo "=== Деплой приложения ==="
+            
+            echo "=== Проверяем изменения ==="
+            git log --oneline -3
+            echo "Текущая ветка: $(git branch --show-current)"
+            
+            echo "=== Деплой приложения ==="
             if [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ]; then
+              # Показываем что в docker-compose
+              echo "Содержимое docker-compose.yml:"
+              head -20 docker-compose.yml
+              
               docker-compose down
               docker-compose up -d --build
               echo "✅ Контейнеры перезапущены"
