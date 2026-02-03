@@ -25,6 +25,9 @@ jobs:
             
             # Переходим в папку проекта
             cd /root/project/deployment
+
+
+            
             
             echo "=== Обновляем репозиторий deployment ==="
             
