@@ -1,82 +1,72 @@
 version: '3.8'
 
 services:
-  postgres:
+  # --- СТАРЫЙ ПРОЕКТ (Article Service) ---
+  article_db:
     container_name: article_service_db
     image: postgres:17.4
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: my_pass
       POSTGRES_DB: auth_service
-    ports:
-      - "5432:5432"
     restart: unless-stopped
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - article_postgres_data:/var/lib/postgresql/data
 
-  postgres_habits:
-    container_name: habits_service_db
-    image: postgres:17.4
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: habits_db
-    ports:
-      - "5432:5432"
-    restart: unless-stopped
-    volumes:
-      - postgres_habits_data:/var/lib/postgresql/data 
-  app:
-    container_name: service_article
+  article_app:
+    container_name: auth_service_app
     build:
       context: ../go-angular-pg/app
       dockerfile: Dockerfile
-    ports:
-      - "8081:8080"
-    depends_on:
-      - postgres
     restart: unless-stopped
     environment:
-      DB_HOST: postgres
+      DB_HOST: article_db
       DB_USER: postgres
       DB_PASSWORD: my_pass
       DB_NAME: auth_service
       DB_PORT: 5432
-
-  app_habits:
-    container_name: service_habits
-    build:
-      context: ../habits_api
-      dockerfile: Dockerfile
-    ports:
-      - "8082:8080"
     depends_on:
-      - postgres_habits
+      - article_db
+
+  # --- НОВЫЙ ПРОЕКТ (Habits Service) ---
+  habits_db:
+    container_name: habits_service_db
+    image: postgres:17.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: habits_pass
+      POSTGRES_DB: habits_db
+    restart: unless-stopped
+    volumes:
+      - habits_postgres_data:/var/lib/postgresql/data
+
+  habits_api:
+    container_name: habits_api
+    build:
+      context: ../habits-api
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DB_HOST: postgres_habits
+      DB_HOST: habits_db
       DB_USER: postgres
-      DB_PASSWORD: postgres
+      DB_PASSWORD: habits_pass
       DB_NAME: habits_db
       DB_PORT: 5432
+    depends_on:
+      - habits_db
 
-
-  angular_frontend:
-    container_name: angular_frontend
+  habits_frontend:
+    container_name: habits_frontend
     build:
-      context: ../go-angular-pg/client
-      dockerfile: Dockerfile  # Существующий Dockerfile Angular
-    restart: unless-stopped
-
-  vue_frontend:
-    container_name: vue_frontend
-    build:
-      context: ../habits 
+      context: ../habits-client
       dockerfile: Dockerfile
     restart: unless-stopped
 
+  # --- NGINX Reverse Proxy ---
   nginx:
-    image: nginx:alpine
+    build:
+      context: ../go-angular-pg/client
+      dockerfile: Dockerfile
     container_name: main_nginx
     ports:
       - "80:80"
@@ -85,13 +75,11 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
-      - app
-      - app_habits
-      - angular_frontend
-      - vue_frontend
+      - article_app
+      - habits_api
+      - habits_frontend
     restart: unless-stopped
 
-
 volumes:
-  postgres_data:
-  postgres_habits_data: 
+  article_postgres_data:
+  habits_postgres_data:

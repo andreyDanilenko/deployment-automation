@@ -25,9 +25,6 @@ jobs:
             
             # Переходим в папку проекта
             cd /root/project/deployment
-
-
-            
             
             echo "=== Обновляем репозиторий deployment ==="
             
@@ -58,27 +55,59 @@ jobs:
             echo "=== Проверяем изменения ==="
             git log --oneline -3
             
+            echo "=== Обновляем habits-api репозиторий ==="
+            cd /root/project/habits-api
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/andreyDanilenko/habits-api.git .
+            else
+              git pull origin master 2>/dev/null || git pull origin/main
+            fi
+            
+            echo "=== Обновляем habits-client репозиторий ==="
+            cd /root/project/habits-client
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/andreyDanilenko/habits-client.git .
+            else
+              git pull origin master 2>/dev/null || git pull origin/main
+            fi
+            
+            echo "=== Обновляем go-angular-pg репозиторий ==="
+            cd /root/project/go-angular-pg
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/andreyDanilenko/go-angular-pg.git .
+            else
+              git pull origin master 2>/dev/null || git pull origin/main
+            fi
+            
             echo "=== Запускаем контейнеры ==="
-            if [ -f "docker-compose.yml" ] || [ -f "docker-compose.yaml" ]; then
-              # ВАЖНО: Используем только stop/start вместо down/up
-              # чтобы не удалять volumes и сети
-              
-              echo "Останавливаем контейнеры..."
-              docker-compose stop || true
-              
-              echo "Скачиваем обновленные образы..."
-              docker-compose pull || true
-              
-              echo "Запускаем контейнеры..."
+            cd /root/project/deployment
+            
+            if [ -f "docker-compose.yml" ]; then
+              echo "Собираем и запускаем контейнеры..."
+              docker-compose down
+              docker-compose build --no-cache
               docker-compose up -d
               
               echo "Проверяем статус..."
               docker-compose ps
+              
+              echo "Проверяем логи nginx..."
+              docker-compose logs --tail=50 nginx
+              
               echo "✅ Контейнеры обновлены и запущены"
             else
               echo "⚠️ docker-compose.yml не найден"
               ls -la
             fi
             
-            echo "=== Проверяем volume ==="
+            echo "=== Проверяем volumes ==="
             docker volume ls | grep postgres_data
+            
+            echo "=== Проверяем доступность сервисов ==="
+            echo "Article Service:"
+            curl -I https://lifedream.tech || echo "Не доступен"
+            
+            echo "Habits Service:"
+            curl -I https://habits.lifedream.tech || echo "Не доступен"
+            
+            echo "=== Деплой завершен ==="
