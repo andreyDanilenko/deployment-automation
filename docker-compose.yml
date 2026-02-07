@@ -58,7 +58,7 @@ services:
   habits_frontend:
     container_name: habits_frontend
     build:
-      context: ../habits-client
+      context: ../habits
       dockerfile: Dockerfile
     restart: unless-stopped
 
