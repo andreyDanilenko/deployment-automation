@@ -27,6 +27,9 @@ services:
       DB_PORT: 5432
     depends_on:
       - article_db
+    # Явно указываем порт
+    expose:
+      - "8080"
 
   # --- НОВЫЙ ПРОЕКТ (Habits Service) ---
   habits_db:
@@ -54,6 +57,9 @@ services:
       DB_PORT: 5432
     depends_on:
       - habits_db
+    # Habits API тоже на 8080
+    expose:
+      - "8080"
 
   habits_frontend:
     container_name: habits_frontend
@@ -61,6 +67,9 @@ services:
       context: ../habits
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Фронтенд на 80 порту
+    expose:
+      - "80"
 
   # --- NGINX Reverse Proxy ---
   nginx:
