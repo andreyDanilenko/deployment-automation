@@ -64,7 +64,7 @@ jobs:
             fi
             
             echo "=== Обновляем habits-client репозиторий ==="
-            cd /root/project/habits-client
+            cd /root/project/habits
             if [ ! -d ".git" ]; then
               git clone https://github.com/andreyDanilenko/habits-client.git .
             else
