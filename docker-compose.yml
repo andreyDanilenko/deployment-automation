@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   postgres:
-    container_name: auth_service_db
+    container_name: article_service_db
     image: postgres:17.4
     environment:
       POSTGRES_USER: postgres
@@ -14,8 +14,20 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  postgres_habits:
+    container_name: habits_service_db
+    image: postgres:17.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: habits_db
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    volumes:
+      - postgres_habits_data:/var/lib/postgresql/data 
   app:
-    container_name: auth_service_app
+    container_name: service_article
     build:
       context: ../go-angular-pg/app
       dockerfile: Dockerfile
@@ -31,11 +43,41 @@ services:
       DB_NAME: auth_service
       DB_PORT: 5432
 
-  nginx:
+  app_habits:
+    container_name: service_habits
+    build:
+      context: ../habits_api
+      dockerfile: Dockerfile
+    ports:
+      - "8082:8080"
+    depends_on:
+      - postgres_habits
+    restart: unless-stopped
+    environment:
+      DB_HOST: postgres_habits
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: habits_db
+      DB_PORT: 5432
+
+
+  angular_frontend:
+    container_name: angular_frontend
     build:
       context: ../go-angular-pg/client
+      dockerfile: Dockerfile  # Существующий Dockerfile Angular
+    restart: unless-stopped
+
+  vue_frontend:
+    container_name: vue_frontend
+    build:
+      context: ../habits 
       dockerfile: Dockerfile
-    container_name: auth_service_nginx
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: main_nginx
     ports:
       - "80:80"
       - "443:443"
@@ -44,8 +86,12 @@ services:
       - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
       - app
+      - app_habits
+      - angular_frontend
+      - vue_frontend
     restart: unless-stopped
 
 
 volumes:
   postgres_data:
+  postgres_habits_data: 
