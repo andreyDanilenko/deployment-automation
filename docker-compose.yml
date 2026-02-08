@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # --- СТАРЫЙ ПРОЕКТ (Article Service) ---
   article_db:
     container_name: article_service_db
     image: postgres:17.4
@@ -14,6 +13,18 @@ services:
       - article_postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
+
+  # Фронтенд основного домена (Angular — статика, как в рабочем admin-panel-golang)
+  article_frontend:
+    container_name: article_frontend
+    build:
+      context: ../go-angular-pg/client
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    networks:
+      - app-network
+    expose:
+      - "80"
 
   article_app:
     container_name: auth_service_app
@@ -89,6 +100,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
+      - article_frontend
       - article_app
       - habits_frontend
       - habits_api
