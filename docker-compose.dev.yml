@@ -1,0 +1,91 @@
+# Docker Compose для локальной разработки.
+# Те же пути, что в docker-compose.yml (под структуру на сервере).
+# Запуск: docker compose -f docker-compose.dev.yml up -d
+# Доступ: http://localhost:8080 (порты 80/443 не заняты)
+
+version: '3.8'
+
+services:
+  article_db:
+    container_name: article_service_db
+    image: postgres:17.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: my_pass
+      POSTGRES_DB: auth_service
+    restart: unless-stopped
+    volumes:
+      - article_postgres_data:/var/lib/postgresql/data
+
+  article_app:
+    container_name: auth_service_app
+    build:
+      context: ../admin-panel-golang/app
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_HOST: article_db
+      DB_USER: postgres
+      DB_PASSWORD: my_pass
+      DB_NAME: auth_service
+      DB_PORT: 5432
+    depends_on:
+      - article_db
+    expose:
+      - "8080"
+
+  habits_db:
+    container_name: habits_service_db
+    image: postgres:17.4
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: habits_pass
+      POSTGRES_DB: habits_db
+    restart: unless-stopped
+    volumes:
+      - habits_postgres_data:/var/lib/postgresql/data
+
+  habits_api:
+    container_name: habits_api
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DB_HOST: habits_db
+      DB_USER: postgres
+      DB_PASSWORD: habits_pass
+      DB_NAME: habits_db
+      DB_PORT: 5432
+    depends_on:
+      - habits_db
+    expose:
+      - "8080"
+
+  habits_frontend:
+    container_name: habits_frontend
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "80"
+
+  nginx:
+    build:
+      context: ../admin-panel-golang/client
+      dockerfile: Dockerfile
+    container_name: main_nginx_dev
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/nginx.dev.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - article_app
+      - habits_api
+      - habits_frontend
+    restart: unless-stopped
+
+volumes:
+  article_postgres_data:
+  habits_postgres_data:
