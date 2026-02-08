@@ -15,6 +15,14 @@
 - **Маршрутизация по `location`** — выбор бэкенда по пути запроса (например `/api/` → article_app, `/habits-api/` → habits_api в dev).
 - **SSL** — только в проде (сертификаты в `nginx/ssl/`).
 
+## SSL и поддомены (habits.lifedream.tech)
+
+- Сертификат `lifedream.tech.crt` обычно покрывает только **lifedream.tech** и **www.lifedream.tech**. Для **habits.lifedream.tech** он не подходит — браузер покажет ошибку сертификата.
+- Решения:
+  1. **Wildcard-сертификат** `*.lifedream.tech` — один сертификат для всех поддоменов; указать его в `ssl_certificate` для всех блоков 443.
+  2. **Отдельный сертификат** для habits — положить в `nginx/ssl/` (например `habits.lifedream.tech.crt` и `.key`) и в блоке `server_name habits.lifedream.tech` указать эти файлы.
+- На сервере папка `deployment/nginx/ssl/` не в git (в `.gitignore`). После клона репозитория нужно **скопировать** сертификаты в эту папку (например из `admin-panel-golang/nginx/ssl/` или с места выпуска). Иначе nginx не найдёт файлы и не запустится на 443.
+
 ## Полезные ссылки (официальная документация)
 
 - **Главная документация:** https://nginx.org/en/docs/
