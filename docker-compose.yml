@@ -47,6 +47,8 @@ services:
     build:
       context: ../habits-api
       dockerfile: Dockerfile
+    ports:
+      - "8082:8080" 
     restart: unless-stopped
     environment:
       DB_HOST: habits_db
@@ -58,6 +60,8 @@ services:
       - habits_db
     expose:
       - "8080"
+
+      
 
   habits_frontend:
     container_name: habits_frontend
