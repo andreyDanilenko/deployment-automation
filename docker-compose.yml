@@ -27,7 +27,6 @@ services:
       DB_PORT: 5432
     depends_on:
       - article_db
-    # Явно указываем порт
     expose:
       - "8080"
 
@@ -57,7 +56,6 @@ services:
       DB_PORT: 5432
     depends_on:
       - habits_db
-    # Habits API тоже на 8080
     expose:
       - "8080"
 
@@ -66,10 +64,9 @@ services:
     build:
       context: ../habits
       dockerfile: Dockerfile
+    ports:
+      - "8081:80"    # ДОБАВЬТЕ ЭТУ СТРОКУ!
     restart: unless-stopped
-    # Фронтенд на 80 порту
-    expose:
-      - "80"
 
   # --- NGINX Reverse Proxy ---
   nginx:
@@ -78,15 +75,13 @@ services:
       dockerfile: Dockerfile
     container_name: main_nginx
     ports:
-      - "8080:80"    # HTTP на другом порту
-      - "8443:443"  
+      - "8080:80"
+      - "8443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
       - article_app
-      - habits_api
-      - habits_frontend
     restart: unless-stopped
 
 volumes:
