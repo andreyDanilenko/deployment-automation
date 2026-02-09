@@ -18,8 +18,6 @@ This repo deploys **two applications** behind one Nginx.
 - **lifedream.tech** — main site: articles and a test chat (one monorepo: Angular + Go).
 - **habits.lifedream.tech** — ERP with the first module “Habits” (habit tracker); front and back are separate repos.
 
-Each project has its own README: [Main site (go-angular-pg)](https://github.com/andreyDanilenko/go-angular-pg/README.md) (or in your clone: `go-angular-pg`), [Habits frontend](https://github.com/andreyDanilenko/habits-client/frontend/README.md), [Habits API](https://github.com/andreyDanilenko/habits-api/backend/README.md) (or `habits-api`).
-
 ---
 
 ## How to deploy everything

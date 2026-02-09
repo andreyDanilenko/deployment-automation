@@ -17,9 +17,6 @@
 
 - **lifedream.tech** — основной сайт: статьи и тест чата (один монорепо: Angular + Go).
 - **habits.lifedream.tech** — ERP с первым модулем «Привычки»; фронт и бэк — отдельные репо.
-
-Описание и стек каждого проекта — в его README: [Основной сайт](https://github.com/andreyDanilenko/go-angular-pg/README.md) (или `go-angular-pg`), [Фронт Привычки](https://github.com/andreyDanilenko/habits-client/frontend/README.md), [API Привычки](https://github.com/andreyDanilenko/habits-api/backend/README.md) (или `habits-api`).
-
 ---
 
 ## Как развернуть всё
