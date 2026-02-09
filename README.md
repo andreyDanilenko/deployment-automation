@@ -16,7 +16,7 @@
 
 - Каждый проект содержит свои `Dockerfile` в корне или подпапках
 - Этот репозиторий содержит только инфраструктуру (docker-compose, nginx, CI)
-- Проекты лежат в соседних папках относительно `deployment/`; опционально можно использовать Git Submodules (см. `.gitmodules.example`)
+- Проекты лежат в соседних папках относительно `deployment/` (submodules не используются)
 
 > **Dev vs prod:** в prod используются пути вида `../go-angular-pg/...`, `../habits-api`, `../habits`; в dev — могут быть `../admin-panel-golang/...`, `../frontend`, `../backend`. Состав сервисов и порты тоже различаются.
 
@@ -32,7 +32,7 @@ deployment/
 │   └── ssl/                   # Сертификаты (только prod; не в git)
 │       └── .gitkeep
 ├── NGINX_GUIDE.md             # Подробный гайд по Nginx
-├── .gitmodules.example        # Пример для Git Submodules (при необходимости)
+├── .gitmodules.example        # Опционально, сейчас не используется
 ├── .github/
 │   └── workflows/
 │       └── deploy.yml         # CI: деплой на сервер по push в main/master
@@ -46,25 +46,7 @@ deployment/
 
 ## Начальная настройка
 
-### Вариант 1: Git Submodules (опционально)
-
-Если проекты в отдельных репозиториях:
-
-```bash
-cd deployment
-
-# Пример: добавить проект
-git submodule add <URL-репозитория> projects/project1
-
-# Инициализировать и обновить submodules
-git submodule update --init --recursive
-```
-
-Используйте `.gitmodules.example` как образец — скопируйте в `.gitmodules` и подставьте свои URL. После этого обновите пути `context:` в `docker-compose.yml` / `docker-compose.dev.yml` на `./projects/...`.
-
-> **Dev vs prod:** при использовании submodules пути в prod и dev compose могут по-прежнему отличаться (например, prod — `./projects/go-angular-pg/client`, dev — `./projects/admin-panel-golang/client`), если на сервере и локально используются разные имена репозиториев.
-
-### Вариант 2: Проекты рядом с deployment (как сейчас)
+### Проекты рядом с deployment (текущая схема)
 
 Проекты лежат в родительской директории:
 
@@ -108,6 +90,22 @@ docker compose -f docker-compose.dev.yml up -d
 
 > **Dev vs prod:** в dev порт 8080 (чтобы не занимать 80/443); в prod — 80 и 443. В dev нет отдельного контейнера article_frontend — статика Article может отдаваться тем же контейнером, что и Nginx (зависит от docker-compose.dev.yml).
 
+## Что разворачивается
+
+Деплой поднимает **два приложения** и общий Nginx.
+
+- **Приложение 1 — Привычки:** отдельный фронт-репо + отдельный бек-репо (два репозитория).
+- **Приложение 2 — Основной сайт (статьи, чат):** один монорепо, внутри него и фронт (Angular), и бек (Go).
+
+| Приложение | Репозитории | Контейнеры | Стек |
+|------------|-------------|------------|------|
+| **1. Привычки** | [habits-client](https://github.com/andreyDanilenko/habits-client.git) (фронт), [habits-api](https://github.com/andreyDanilenko/habits-api.git) (бек) | `habits_frontend`, `habits_api`, `habits_db` | Vue 3 FSD + Go Gin, PostgreSQL |
+| **2. Основной сайт** | [go-angular-pg](https://github.com/andreyDanilenko/go-angular-pg.git) (монорепо: фронт и бек в одном репо) | `article_frontend`, `article_app`, `article_db` | Angular + Go, PostgreSQL (статьи, чат) |
+
+Итого: **3 репозитория**, **2 приложения** (в монорепе одно приложение = один фронт + один бек).
+
+На сервере ожидаются папки: `../habits` (clone habits-client), `../habits-api`, `../go-angular-pg`. Workflow клонирует/обновляет эти репозитории, затем выполняет `docker-compose build` и `docker-compose up -d`.
+
 ## Текущие сервисы (prod — docker-compose.yml)
 
 | Сервис              | Описание                    | Сборка (context)        |
@@ -149,33 +147,6 @@ docker compose -f docker-compose.dev.yml restart nginx
 
 В соответствующем compose-файле в сервисе `nginx` в `depends_on` добавьте новые фронт/бэкенд контейнеры.
 
-## Работа с Git Submodules
-
-Если перешли на submodules (см. `.gitmodules.example`):
-
-```bash
-# Обновить все submodules
-git submodule update --remote
-
-# Обновить один
-git submodule update --remote projects/project1
-
-# Переключить версию
-cd projects/project1
-git checkout main   # или v1.0.0
-cd ../..
-git add projects/project1
-git commit -m "Update project1 to main"
-```
-
-Удаление submodule:
-
-```bash
-git submodule deinit -f projects/project1
-git rm -f projects/project1
-rm -rf .git/modules/projects/project1
-```
-
 ## Управление сервисами
 
 ```bash
@@ -210,23 +181,17 @@ docker-compose logs -f nginx
 
 ## CI/CD
 
-В `.github/workflows/deploy.yml` настроен деплой при push в `main`/`master`: SSH на сервер, обновление репозиториев (deployment, habits-api, habits, go-angular-pg), затем `docker-compose down && build --no-cache && up -d`. Серверные пути и имена репозиториев зашиты в workflow — при отличии dev/prod окружений их можно вынести в переменные/секреты.
+В `.github/workflows/deploy.yml` настроен деплой при push в `main`/`master`: SSH на сервер, обновление репозиториев (deployment, habits-api, habits, go-angular-pg), затем `docker-compose down && build && up -d` (сборка с кэшем слоёв). Серверные пути и имена репозиториев зашиты в workflow — при отличии dev/prod окружений их можно вынести в переменные/секреты.
 
 ## Best Practices
 
 1. **Dev и prod:** явно разделяйте конфиги (отдельные compose и nginx-файлы) и не полагайтесь на то, что они совпадают.
-2. **Версионирование:** при необходимости используйте Git Submodules для фиксации версий проектов.
+2. **Версионирование:** версии проектов фиксируются на сервере через `git pull` в нужных папках (submodules сейчас не используются).
 3. **Dockerfile:** каждый проект собирает свой образ; инфраструктура только в deployment.
 4. **Переменные окружения:** используйте `.env` для паролей и URL; не коммитить секреты.
 5. **Документация:** структуру и отличия dev/prod документируйте в README и NGINX_GUIDE.md.
 
 ## Troubleshooting
-
-### Submodule не обновляется
-
-```bash
-git submodule update --init --recursive --force
-```
 
 ### Проблемы с путями в docker-compose
 
