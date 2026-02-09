@@ -1,407 +1,245 @@
 # Deployment Configuration
 
-Гибкая конфигурация для развертывания неограниченного количества проектов с использованием Docker Compose и Nginx.
+Гибкая конфигурация для развертывания проектов с использованием Docker Compose и Nginx.
+
+> **Важно:** конфигурация **dev** (локальная разработка) и **prod** (сервер) может отличаться: разные compose-файлы, пути к проектам, конфиги Nginx, порты и наличие SSL. В этом README описаны оба варианта; при настройке смотрите соответствующий раздел.
 
 ## Архитектура
 
-Этот репозиторий является **репозиторием-конфигом** (infrastructure/deploy репозиторий), который:
+Этот репозиторий является **репозиторием-конфигом** (infrastructure/deploy), который:
 
-- Содержит общий `docker-compose.yml` для всех проектов
-- Управляет конфигурацией Nginx для маршрутизации
-- Ссылается на проекты через Git Submodules или прямые пути
+- Содержит `docker-compose.yml` (prod) и `docker-compose.dev.yml` (dev)
+- Управляет конфигурацией Nginx для маршрутизации (`nginx.conf` — prod, `nginx.dev.conf` — dev)
+- Ссылается на проекты через относительные пути (`../go-angular-pg`, `../habits-api`, `../habits`, `../frontend`, `../backend` и т.д.)
 
 **Принцип работы:**
-- Каждый проект (репозиторий) содержит свои собственные `Dockerfile` в корне или подпапках
-- Этот репозиторий содержит только инфраструктуру (docker-compose, nginx)
-- Проекты подтягиваются через Git Submodules или копирование
 
-## Структура
+- Каждый проект содержит свои `Dockerfile` в корне или подпапках
+- Этот репозиторий содержит только инфраструктуру (docker-compose, nginx, CI)
+- Проекты лежат в соседних папках относительно `deployment/`; опционально можно использовать Git Submodules (см. `.gitmodules.example`)
+
+> **Dev vs prod:** в prod используются пути вида `../go-angular-pg/...`, `../habits-api`, `../habits`; в dev — могут быть `../admin-panel-golang/...`, `../frontend`, `../backend`. Состав сервисов и порты тоже различаются.
+
+## Структура (текущее состояние репозитория)
 
 ```
-deployment/                    # Репозиторий-конфиг
-├── docker-compose.yml         # Основной compose файл
+deployment/
+├── docker-compose.yml          # Prod: все сервисы, nginx на 80/443
+├── docker-compose.dev.yml     # Dev: локальная разработка, nginx на 8080
 ├── nginx/
-│   ├── nginx.conf             # Основная конфигурация Nginx
-│   └── conf.d/                # Конфигурации для каждого проекта
-│       ├── default.conf       # Конфигурация для текущего проекта
-│       └── template.conf.example  # Шаблон для новых проектов
-├── projects/                  # Проекты (через Git Submodules)
-│   ├── project1/              # Git Submodule → репозиторий проекта 1
-│   │   ├── frontend/
-│   │   │   └── Dockerfile
-│   │   └── backend/
-│   │       └── Dockerfile
-│   └── project2/              # Git Submodule → репозиторий проекта 2
-│       └── ...
-├── scripts/
-│   └── init-submodules.sh     # Скрипт инициализации submodules
-└── .gitmodules                # Конфигурация Git Submodules
+│   ├── nginx.conf             # Prod: lifedream.tech, habits.lifedream.tech, HTTPS
+│   ├── nginx.dev.conf         # Dev: localhost, HTTP, /habits/, /habits-api/
+│   └── ssl/                   # Сертификаты (только prod; не в git)
+│       └── .gitkeep
+├── NGINX_GUIDE.md             # Подробный гайд по Nginx
+├── .gitmodules.example        # Пример для Git Submodules (при необходимости)
+├── .github/
+│   └── workflows/
+│       └── deploy.yml         # CI: деплой на сервер по push в main/master
+├── .dockerignore
+└── .gitignore
 ```
+
+Отдельной папки `nginx/conf.d/` в репозитории нет: один файл `nginx.conf` (prod) или `nginx.dev.conf` (dev).
+
+> **Dev vs prod:** в prod Nginx монтирует весь `nginx.conf`; в dev в контейнер передаётся `nginx.dev.conf` как `conf.d/default.conf`. Маршруты и домены отличаются.
 
 ## Начальная настройка
 
-### Вариант 1: Git Submodules (Рекомендуется)
+### Вариант 1: Git Submodules (опционально)
 
-#### Шаг 1: Добавить проекты как Submodules
+Если проекты в отдельных репозиториях:
 
 ```bash
 cd deployment
 
-# Добавить проект 1
-git submodule add <URL-репозитория-проекта-1> projects/project1
-
-# Добавить проект 2
-git submodule add <URL-репозитория-проекта-2> projects/project2
+# Пример: добавить проект
+git submodule add <URL-репозитория> projects/project1
 
 # Инициализировать и обновить submodules
 git submodule update --init --recursive
 ```
 
-#### Шаг 2: Настроить docker-compose.yml
+Используйте `.gitmodules.example` как образец — скопируйте в `.gitmodules` и подставьте свои URL. После этого обновите пути `context:` в `docker-compose.yml` / `docker-compose.dev.yml` на `./projects/...`.
 
-Обновите `docker-compose.yml` для ссылки на проекты:
+> **Dev vs prod:** при использовании submodules пути в prod и dev compose могут по-прежнему отличаться (например, prod — `./projects/go-angular-pg/client`, dev — `./projects/admin-panel-golang/client`), если на сервере и локально используются разные имена репозиториев.
 
-```yaml
-services:
-  project1-frontend:
-    build:
-      context: ./projects/project1/frontend
-      dockerfile: Dockerfile
-    container_name: project1-frontend
-    networks:
-      - app-network
+### Вариант 2: Проекты рядом с deployment (как сейчас)
 
-  project1-backend:
-    build:
-      context: ./projects/project1/backend
-      dockerfile: Dockerfile
-    container_name: project1-backend
-    networks:
-      - app-network
+Проекты лежат в родительской директории:
+
+```
+../
+├── deployment/           # этот репо
+├── go-angular-pg/        # client + app (prod)
+├── admin-panel-golang/   # client + app (dev, если отличается)
+├── habits-api/
+├── habits/               # фронт habits (prod)
+├── frontend/             # фронт habits (dev)
+└── backend/              # API habits (dev)
 ```
 
-#### Шаг 3: Обновить submodules
-
-```bash
-# Обновить все submodules до последних коммитов
-git submodule update --remote
-
-# Или обновить конкретный submodule
-git submodule update --remote projects/project1
-```
-
-### Вариант 2: Прямое копирование (Проще для начала)
-
-Если не хотите использовать Git Submodules, просто скопируйте папки проектов:
-
-```bash
-cd deployment
-mkdir -p projects
-cp -r ../frontend projects/project1-frontend
-cp -r ../backend projects/project1-backend
-```
-
-Затем обновите `docker-compose.yml` соответственно.
+Ничего дополнительно настраивать не нужно — в compose уже указаны `../...` пути.
 
 ## Быстрый старт
 
-### 1. Инициализация (если используете Submodules)
+### Prod (сервер)
 
 ```bash
-# Клонировать репозиторий-конфиг с submodules
-git clone --recursive <URL-репозитория-конфига>
+cd deployment
 
-# Или если уже клонировали без --recursive
-git submodule update --init --recursive
-```
-
-### 2. Настройка переменных окружения
-
-```bash
+# При необходимости
 cp .env.example .env
-# Отредактируйте .env файл при необходимости
-```
+# Отредактируйте .env и положите SSL-сертификаты в nginx/ssl/
 
-### 3. Запуск всех сервисов
-
-```bash
 docker-compose up -d
-```
-
-### 4. Проверка статуса
-
-```bash
 docker-compose ps
 ```
 
+### Dev (локальная разработка)
+
+```bash
+cd deployment
+
+docker compose -f docker-compose.dev.yml up -d
+```
+
+Доступ: **http://localhost:8080**. Article — корень и `/api/`, Habits — `/habits/` и `/habits-api/`.
+
+> **Dev vs prod:** в dev порт 8080 (чтобы не занимать 80/443); в prod — 80 и 443. В dev нет отдельного контейнера article_frontend — статика Article может отдаваться тем же контейнером, что и Nginx (зависит от docker-compose.dev.yml).
+
+## Текущие сервисы (prod — docker-compose.yml)
+
+| Сервис              | Описание                    | Сборка (context)        |
+|---------------------|----------------------------|--------------------------|
+| article_db          | PostgreSQL для Article     | image: postgres:17.4     |
+| article_frontend    | Фронт основного домена     | ../go-angular-pg/client  |
+| article_app         | API Article                | ../go-angular-pg/app     |
+| habits_db           | PostgreSQL для Habits      | image: postgres:17.4     |
+| habits_api          | API Habits                 | ../habits-api            |
+| habits_frontend     | Фронт Habits               | ../habits                |
+| nginx               | Reverse proxy, 80/443      | image: nginx:alpine      |
+
+В dev (`docker-compose.dev.yml`) набор и пути к образам могут отличаться — см. сам файл.
+
 ## Добавление нового проекта
 
-### Шаг 1: Добавить проект как Submodule
+### Шаг 1: Добавить сервисы в docker-compose
+
+В `docker-compose.yml` (и при необходимости в `docker-compose.dev.yml`) добавьте сервисы нового проекта по аналогии с `habits_*` / `article_*`.
+
+### Шаг 2: Обновить Nginx
+
+- **Prod:** в `nginx/nginx.conf` добавьте блоки `server` (или `location`) для нового домена/путей и при необходимости SSL.
+- **Dev:** в `nginx/nginx.dev.conf` добавьте `location` для нового приложения (например `/new-app/` и `/new-app-api/`).
+
+После правок перезапустите Nginx:
 
 ```bash
-git submodule add <URL-нового-проекта> projects/new-project
-git submodule update --init --recursive
-```
-
-### Шаг 2: Создать конфигурацию Nginx
-
-```bash
-cp nginx/conf.d/template.conf.example nginx/conf.d/new-project.conf
-```
-
-Отредактируйте `new-project.conf`:
-- Измените `server_name` на домен нового проекта
-- Обновите `proxy_pass` URLs на соответствующие сервисы
-
-### Шаг 3: Добавить сервисы в docker-compose.yml
-
-```yaml
-services:
-  new-project-frontend:
-    build:
-      context: ./projects/new-project/frontend
-      dockerfile: Dockerfile
-    container_name: new-project-frontend
-    environment:
-      - VITE_API_BASE_URL=http://new-project-backend:8080
-    networks:
-      - app-network
-
-  new-project-backend:
-    build:
-      context: ./projects/new-project/backend
-      dockerfile: Dockerfile
-    container_name: new-project-backend
-    environment:
-      - SERVER_PORT=8080
-    networks:
-      - app-network
-    depends_on:
-      - postgres
-```
-
-### Шаг 4: Обновить зависимости Nginx
-
-В `docker-compose.yml` обновите `depends_on` для nginx:
-
-```yaml
-nginx:
-  depends_on:
-    - project1-frontend
-    - project1-backend
-    - new-project-frontend
-    - new-project-backend
-```
-
-### Шаг 5: Перезапустить сервисы
-
-```bash
-docker-compose up -d --build
+# Prod
 docker-compose restart nginx
+
+# Dev
+docker compose -f docker-compose.dev.yml restart nginx
 ```
+
+> **Dev vs prod:** маршруты и домены в dev (localhost, пути) и prod (отдельные домены, HTTPS) обычно разные — это нормально.
+
+### Шаг 3: Зависимости Nginx
+
+В соответствующем compose-файле в сервисе `nginx` в `depends_on` добавьте новые фронт/бэкенд контейнеры.
 
 ## Работа с Git Submodules
 
-### Обновление проектов
+Если перешли на submodules (см. `.gitmodules.example`):
 
 ```bash
-# Обновить все submodules до последних коммитов
+# Обновить все submodules
 git submodule update --remote
 
-# Обновить конкретный submodule
+# Обновить один
 git submodule update --remote projects/project1
 
-# Обновить до конкретного коммита
+# Переключить версию
 cd projects/project1
-git checkout <commit-hash>
+git checkout main   # или v1.0.0
 cd ../..
 git add projects/project1
-git commit -m "Update project1 to specific commit"
+git commit -m "Update project1 to main"
 ```
 
-### Переключение версий проектов
+Удаление submodule:
 
 ```bash
-# Перейти в директорию проекта
-cd projects/project1
-
-# Переключиться на нужную ветку/тег
-git checkout main
-# или
-git checkout v1.0.0
-
-# Вернуться в корень и закоммитить изменения
-cd ../..
-git add projects/project1
-git commit -m "Update project1 to v1.0.0"
-```
-
-### Удаление Submodule
-
-```bash
-# Удалить submodule
 git submodule deinit -f projects/project1
 git rm -f projects/project1
 rm -rf .git/modules/projects/project1
 ```
 
-## Структура проектов
-
-Каждый проект должен иметь следующую структуру:
-
-```
-project-name/
-├── frontend/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── ...
-├── backend/
-│   ├── Dockerfile
-│   ├── go.mod
-│   └── ...
-└── README.md
-```
-
-Или если проект монолитный:
-
-```
-project-name/
-├── Dockerfile
-├── package.json
-└── ...
-```
-
-В `docker-compose.yml` укажите правильный путь:
-
-```yaml
-build:
-  context: ./projects/project-name/frontend  # или ./projects/project-name
-  dockerfile: Dockerfile
-```
-
 ## Управление сервисами
 
-### Остановка
-
 ```bash
+# Остановка (prod)
 docker-compose stop
-```
 
-### Остановка и удаление контейнеров
-
-```bash
+# Остановка и удаление контейнеров
 docker-compose down
-```
 
-### Пересборка конкретного проекта
+# Dev
+docker compose -f docker-compose.dev.yml down
 
-```bash
-docker-compose build project1-frontend
-docker-compose up -d project1-frontend
-```
+# Пересборка одного сервиса (prod)
+docker-compose build article_frontend
+docker-compose up -d article_frontend
 
-### Просмотр логов
-
-```bash
-# Все сервисы
+# Логи
 docker-compose logs -f
-
-# Конкретный сервис
-docker-compose logs -f project1-frontend
+docker-compose logs -f nginx
 ```
 
-## SSL/HTTPS настройка
+## SSL/HTTPS (prod)
 
-### 1. Получить SSL сертификаты
+1. Получите сертификаты (Let's Encrypt и т.п.).
+2. Положите файлы в `nginx/ssl/` (папка в `.gitignore` — не коммитить ключи).
+3. В `nginx/nginx.conf` указаны пути к `lifedream.tech` и `habits.lifedream.tech`; при добавлении доменов добавьте свои `ssl_certificate` / `ssl_certificate_key`.
+4. Перезапуск: `docker-compose restart nginx`.
 
-Используйте Let's Encrypt или другой провайдер.
+Подробнее — в **NGINX_GUIDE.md** (wildcard vs отдельные сертификаты, копирование на сервер).
 
-### 2. Разместить сертификаты
+> **Dev vs prod:** в dev SSL обычно не используется; в prod обязателен для доменов.
 
-```bash
-mkdir -p nginx/ssl
-# Скопируйте cert.pem и key.pem в nginx/ssl/
-```
+## CI/CD
 
-### 3. Раскомментировать SSL конфигурацию
-
-В `nginx/conf.d/project-name.conf` раскомментируйте блок с SSL.
-
-### 4. Перезапустить Nginx
-
-```bash
-docker-compose restart nginx
-```
-
-## Пример: Текущая структура (frontend + backend)
-
-Для текущего проекта структура следующая:
-
-```
-deployment/
-├── docker-compose.yml         # Ссылается на ../frontend и ../backend
-├── nginx/
-│   └── conf.d/
-│       └── default.conf        # Конфигурация для localhost
-└── ...
-
-../frontend/                    # Отдельный репозиторий или папка
-├── Dockerfile
-└── ...
-
-../backend/                     # Отдельный репозиторий или папка
-├── Dockerfile
-└── ...
-```
-
-В `docker-compose.yml` используются пути `../frontend` и `../backend`.
-
-## Миграция на Submodules
-
-Если у вас уже есть проекты в соседних папках:
-
-1. **Создайте репозитории** для каждого проекта (если еще не созданы)
-2. **Добавьте их как submodules:**
-
-```bash
-cd deployment
-
-# Если проекты уже в Git репозиториях
-git submodule add <URL-frontend> projects/frontend
-git submodule add <URL-backend> projects/backend
-
-# Обновите docker-compose.yml:
-# context: ./projects/frontend
-# context: ./projects/backend
-```
-
-3. **Обновите docker-compose.yml** для использования новых путей
+В `.github/workflows/deploy.yml` настроен деплой при push в `main`/`master`: SSH на сервер, обновление репозиториев (deployment, habits-api, habits, go-angular-pg), затем `docker-compose down && build --no-cache && up -d`. Серверные пути и имена репозиториев зашиты в workflow — при отличии dev/prod окружений их можно вынести в переменные/секреты.
 
 ## Best Practices
 
-1. **Версионирование**: Используйте Git Submodules для контроля версий проектов
-2. **Изоляция**: Каждый проект должен быть независимым
-3. **Dockerfile**: Каждый проект содержит свой Dockerfile
-4. **Конфигурация**: Nginx конфигурации хранятся в `nginx/conf.d/`
-5. **Переменные окружения**: Используйте `.env` файлы для разных окружений
-6. **Документация**: Документируйте структуру каждого проекта
+1. **Dev и prod:** явно разделяйте конфиги (отдельные compose и nginx-файлы) и не полагайтесь на то, что они совпадают.
+2. **Версионирование:** при необходимости используйте Git Submodules для фиксации версий проектов.
+3. **Dockerfile:** каждый проект собирает свой образ; инфраструктура только в deployment.
+4. **Переменные окружения:** используйте `.env` для паролей и URL; не коммитить секреты.
+5. **Документация:** структуру и отличия dev/prod документируйте в README и NGINX_GUIDE.md.
 
 ## Troubleshooting
 
 ### Submodule не обновляется
 
 ```bash
-# Принудительно обновить
 git submodule update --init --recursive --force
 ```
 
 ### Проблемы с путями в docker-compose
 
-Убедитесь, что пути в `context:` правильные относительно `docker-compose.yml`:
-- `./projects/project1/frontend` - если проект в папке projects
-- `../frontend` - если проект в родительской директории
+Пути в `context:` заданы относительно каталога с `docker-compose.yml`. Проверьте:
 
-### Проблемы с правами
+- Prod: `../go-angular-pg/client`, `../habits-api`, `../habits` и т.д.
+- Dev: могут быть `../admin-panel-golang/app`, `../frontend`, `../backend` — они могут отличаться от prod.
+
+### Порт 80 занят
+
+См. **NGINX_GUIDE.md** — раздел «Ошибка address already in use». В dev используется порт 8080, чтобы избежать конфликта.
+
+### Права на файлы
 
 ```bash
 sudo chown -R $USER:$USER nginx/logs
@@ -410,21 +248,15 @@ sudo chown -R $USER:$USER nginx/logs
 ## Полезные команды
 
 ```bash
-# Инициализация всех submodules
-git submodule update --init --recursive
-
-# Обновление всех submodules
-git submodule update --remote
-
-# Статус submodules
-git submodule status
-
-# Просмотр конфигурации docker-compose
+# Prod
 docker-compose config
-
-# Пересборка всех сервисов
 docker-compose build --no-cache
+docker-compose up -d
 
-# Очистка неиспользуемых ресурсов
+# Dev
+docker compose -f docker-compose.dev.yml config
+docker compose -f docker-compose.dev.yml up -d --build
+
+# Общая очистка
 docker system prune -a
 ```
