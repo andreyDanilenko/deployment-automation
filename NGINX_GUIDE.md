@@ -1,5 +1,7 @@
 # Мини-гайд по Nginx в проекте
 
+**Deployment:** [README.md](README.md) (English) · [README.ru.md](README.ru.md) (русский)
+
 ## Роли конфигов
 
 | Файл | Назначение |

@@ -1,84 +1,84 @@
 # Deployment Configuration
 
-Гибкая конфигурация для развертывания проектов с использованием Docker Compose и Nginx.
+Flexible configuration for deploying projects with Docker Compose and Nginx.
 
-> **Важно:** конфигурация **dev** (локальная разработка) и **prod** (сервер) может отличаться: разные compose-файлы, пути к проектам, конфиги Nginx, порты и наличие SSL. В этом README описаны оба варианта; при настройке смотрите соответствующий раздел.
+**Русский:** [README на русском](README.ru.md) · **Nginx:** [NGINX_GUIDE.md](NGINX_GUIDE.md) (Nginx details, SSL, troubleshooting)
 
-## Архитектура
+> **Note:** **dev** (local) and **prod** (server) configs can differ: different compose files, project paths, Nginx configs, ports, SSL. This README covers both; see the relevant section when setting up.
 
-Этот репозиторий является **репозиторием-конфигом** (infrastructure/deploy), который:
+## Architecture
 
-- Содержит `docker-compose.yml` (prod) и `docker-compose.dev.yml` (dev)
-- Управляет конфигурацией Nginx для маршрутизации (`nginx.conf` — prod, `nginx.dev.conf` — dev)
-- Ссылается на проекты через относительные пути (`../go-angular-pg`, `../habits-api`, `../habits`, `../frontend`, `../backend` и т.д.)
+This repo is the **config/infrastructure** repo. It:
 
-**Принцип работы:**
+- Provides `docker-compose.yml` (prod) and `docker-compose.dev.yml` (dev)
+- Holds Nginx config for routing (`nginx.conf` — prod, `nginx.dev.conf` — dev)
+- References projects via relative paths (`../go-angular-pg`, `../habits-api`, `../habits`, etc.)
 
-- Каждый проект содержит свои `Dockerfile` в корне или подпапках
-- Этот репозиторий содержит только инфраструктуру (docker-compose, nginx, CI)
-- Проекты лежат в соседних папках относительно `deployment/` (submodules не используются)
+**How it works:**
 
-> **Dev vs prod:** в prod используются пути вида `../go-angular-pg/...`, `../habits-api`, `../habits`; в dev — могут быть `../admin-panel-golang/...`, `../frontend`, `../backend`. Состав сервисов и порты тоже различаются.
+- Each app has its own `Dockerfile` in its repo
+- This repo only has infrastructure (compose, nginx, CI)
+- Projects live in sibling folders next to `deployment/` (no Git submodules)
 
-## Структура (текущее состояние репозитория)
+> **Dev vs prod:** prod uses paths like `../go-angular-pg/...`, `../habits-api`, `../habits`; dev may use `../admin-panel-golang/...`, `../frontend`, `../backend`. Service set and ports differ too.
+
+## Repo structure
 
 ```
 deployment/
-├── docker-compose.yml          # Prod: все сервисы, nginx на 80/443
-├── docker-compose.dev.yml     # Dev: локальная разработка, nginx на 8080
+├── docker-compose.yml          # Prod: all services, nginx on 80/443
+├── docker-compose.dev.yml      # Dev: local, nginx on 8080
 ├── nginx/
 │   ├── nginx.conf             # Prod: lifedream.tech, habits.lifedream.tech, HTTPS
 │   ├── nginx.dev.conf         # Dev: localhost, HTTP, /habits/, /habits-api/
-│   └── ssl/                   # Сертификаты (только prod; не в git)
+│   └── ssl/                   # Certificates (prod only; not in git)
 │       └── .gitkeep
-├── NGINX_GUIDE.md             # Подробный гайд по Nginx
-├── .gitmodules.example        # Опционально, сейчас не используется
-├── .github/
-│   └── workflows/
-│       └── deploy.yml         # CI: деплой на сервер по push в main/master
+├── NGINX_GUIDE.md             # Nginx details, SSL, ports — see [NGINX_GUIDE.md](NGINX_GUIDE.md)
+├── .gitmodules.example        # Optional, not used currently
+├── .github/workflows/deploy.yml
 ├── .dockerignore
 └── .gitignore
 ```
 
-Отдельной папки `nginx/conf.d/` в репозитории нет: один файл `nginx.conf` (prod) или `nginx.dev.conf` (dev).
+Single Nginx config file per environment (no `nginx/conf.d/`).
 
-> **Dev vs prod:** в prod Nginx монтирует весь `nginx.conf`; в dev в контейнер передаётся `nginx.dev.conf` как `conf.d/default.conf`. Маршруты и домены отличаются.
+> **Dev vs prod:** prod mounts full `nginx.conf`; dev uses `nginx.dev.conf` as `conf.d/default.conf`. Routes and domains differ.
 
-## Начальная настройка
+## Initial setup
 
-### Проекты рядом с deployment (текущая схема)
+### Projects next to deployment (current setup)
 
-Проекты лежат в родительской директории:
+Projects live in the parent directory:
 
 ```
 ../
-├── deployment/           # этот репо
+├── deployment/           # this repo
 ├── go-angular-pg/        # client + app (prod)
-├── admin-panel-golang/   # client + app (dev, если отличается)
+├── admin-panel-golang/   # client + app (dev, if different)
 ├── habits-api/
-├── habits/               # фронт habits (prod)
-├── frontend/             # фронт habits (dev)
-└── backend/              # API habits (dev)
+├── habits/               # habits frontend (prod)
+├── frontend/             # habits frontend (dev)
+└── backend/              # habits API (dev)
 ```
 
-Ничего дополнительно настраивать не нужно — в compose уже указаны `../...` пути.
+No extra setup — compose already uses `../...` paths.
 
-## Быстрый старт
+## Quick start
 
-### Prod (сервер)
+### Prod (server)
 
 ```bash
 cd deployment
 
-# При необходимости
+# If needed
 cp .env.example .env
-# Отредактируйте .env и положите SSL-сертификаты в nginx/ssl/
+# Edit .env and place SSL certs in nginx/ssl/
 
 docker-compose up -d
 docker-compose ps
 ```
 
-### Dev (локальная разработка)
+### Dev (local)
 
 ```bash
 cd deployment
@@ -86,52 +86,52 @@ cd deployment
 docker compose -f docker-compose.dev.yml up -d
 ```
 
-Доступ: **http://localhost:8080**. Article — корень и `/api/`, Habits — `/habits/` и `/habits-api/`.
+Access: **http://localhost:8080**. Article — `/` and `/api/`, Habits — `/habits/` and `/habits-api/`.
 
-> **Dev vs prod:** в dev порт 8080 (чтобы не занимать 80/443); в prod — 80 и 443. В dev нет отдельного контейнера article_frontend — статика Article может отдаваться тем же контейнером, что и Nginx (зависит от docker-compose.dev.yml).
+> **Dev vs prod:** dev uses port 8080; prod uses 80 and 443. See [NGINX_GUIDE.md](NGINX_GUIDE.md) for ports and “address already in use”.
 
-## Что разворачивается
+## What gets deployed
 
-Деплой поднимает **два приложения** и общий Nginx.
+**Two applications** plus shared Nginx.
 
-- **Приложение 1 — Привычки:** отдельный фронт-репо + отдельный бек-репо (два репозитория).
-- **Приложение 2 — Основной сайт (статьи, чат):** один монорепо, внутри него и фронт (Angular), и бек (Go).
+- **App 1 — Habits:** separate frontend repo + separate backend repo (two repos).
+- **App 2 — Main site (articles, chat):** one monorepo with frontend (Angular) and backend (Go).
 
-| Приложение | Репозитории | Контейнеры | Стек |
-|------------|-------------|------------|------|
-| **1. Привычки** | [habits-client](https://github.com/andreyDanilenko/habits-client.git) (фронт), [habits-api](https://github.com/andreyDanilenko/habits-api.git) (бек) | `habits_frontend`, `habits_api`, `habits_db` | Vue 3 FSD + Go Gin, PostgreSQL |
-| **2. Основной сайт** | [go-angular-pg](https://github.com/andreyDanilenko/go-angular-pg.git) (монорепо: фронт и бек в одном репо) | `article_frontend`, `article_app`, `article_db` | Angular + Go, PostgreSQL (статьи, чат) |
+| Application | Repositories | Containers | Stack |
+|-------------|--------------|------------|--------|
+| **1. Habits** | [habits-client](https://github.com/andreyDanilenko/habits-client.git) (front), [habits-api](https://github.com/andreyDanilenko/habits-api.git) (back) | `habits_frontend`, `habits_api`, `habits_db` | Vue 3 FSD + Go Gin, PostgreSQL |
+| **2. Main site** | [go-angular-pg](https://github.com/andreyDanilenko/go-angular-pg.git) (monorepo: front + back) | `article_frontend`, `article_app`, `article_db` | Angular + Go, PostgreSQL (articles, chat) |
 
-Итого: **3 репозитория**, **2 приложения** (в монорепе одно приложение = один фронт + один бек).
+**Total:** 3 repos, 2 applications (monorepo = one app = one front + one back).
 
-На сервере ожидаются папки: `../habits` (clone habits-client), `../habits-api`, `../go-angular-pg`. Workflow клонирует/обновляет эти репозитории, затем выполняет `docker-compose build` и `docker-compose up -d`.
+Server expects: `../habits` (clone habits-client), `../habits-api`, `../go-angular-pg`. The workflow clones/updates these, then runs `docker-compose build` and `docker-compose up -d`.
 
-## Текущие сервисы (prod — docker-compose.yml)
+## Services (prod — docker-compose.yml)
 
-| Сервис              | Описание                    | Сборка (context)        |
-|---------------------|----------------------------|--------------------------|
-| article_db          | PostgreSQL для Article     | image: postgres:17.4     |
-| article_frontend    | Фронт основного домена     | ../go-angular-pg/client  |
-| article_app         | API Article                | ../go-angular-pg/app     |
-| habits_db           | PostgreSQL для Habits      | image: postgres:17.4     |
-| habits_api          | API Habits                 | ../habits-api            |
-| habits_frontend     | Фронт Habits               | ../habits                |
-| nginx               | Reverse proxy, 80/443      | image: nginx:alpine      |
+| Service           | Description              | Build context        |
+|-------------------|--------------------------|----------------------|
+| article_db         | PostgreSQL for Article   | image: postgres:17.4 |
+| article_frontend   | Main site frontend       | ../go-angular-pg/client |
+| article_app        | Article API              | ../go-angular-pg/app |
+| habits_db          | PostgreSQL for Habits    | image: postgres:17.4 |
+| habits_api         | Habits API               | ../habits-api        |
+| habits_frontend    | Habits frontend          | ../habits            |
+| nginx              | Reverse proxy, 80/443    | image: nginx:alpine  |
 
-В dev (`docker-compose.dev.yml`) набор и пути к образам могут отличаться — см. сам файл.
+Dev (`docker-compose.dev.yml`) may use different services/paths — check that file.
 
-## Добавление нового проекта
+## Adding a new project
 
-### Шаг 1: Добавить сервисы в docker-compose
+### Step 1: Add services to docker-compose
 
-В `docker-compose.yml` (и при необходимости в `docker-compose.dev.yml`) добавьте сервисы нового проекта по аналогии с `habits_*` / `article_*`.
+In `docker-compose.yml` (and `docker-compose.dev.yml` if needed) add services like `habits_*` / `article_*`.
 
-### Шаг 2: Обновить Nginx
+### Step 2: Update Nginx
 
-- **Prod:** в `nginx/nginx.conf` добавьте блоки `server` (или `location`) для нового домена/путей и при необходимости SSL.
-- **Dev:** в `nginx/nginx.dev.conf` добавьте `location` для нового приложения (например `/new-app/` и `/new-app-api/`).
+- **Prod:** in `nginx/nginx.conf` add `server` / `location` for the new domain/paths and SSL if needed.
+- **Dev:** in `nginx/nginx.dev.conf` add `location` for the new app (e.g. `/new-app/`, `/new-app-api/`).
 
-После правок перезапустите Nginx:
+Restart Nginx:
 
 ```bash
 # Prod
@@ -141,76 +141,76 @@ docker-compose restart nginx
 docker compose -f docker-compose.dev.yml restart nginx
 ```
 
-> **Dev vs prod:** маршруты и домены в dev (localhost, пути) и prod (отдельные домены, HTTPS) обычно разные — это нормально.
+See [NGINX_GUIDE.md](NGINX_GUIDE.md) for config roles and SSL.
 
-### Шаг 3: Зависимости Nginx
+### Step 3: Nginx dependencies
 
-В соответствующем compose-файле в сервисе `nginx` в `depends_on` добавьте новые фронт/бэкенд контейнеры.
+In the compose file, add the new frontend/backend containers to `nginx`’s `depends_on`.
 
-## Управление сервисами
+## Managing services
 
 ```bash
-# Остановка (prod)
+# Stop (prod)
 docker-compose stop
 
-# Остановка и удаление контейнеров
+# Down
 docker-compose down
 
 # Dev
 docker compose -f docker-compose.dev.yml down
 
-# Пересборка одного сервиса (prod)
+# Rebuild one service (prod)
 docker-compose build article_frontend
 docker-compose up -d article_frontend
 
-# Логи
+# Logs
 docker-compose logs -f
 docker-compose logs -f nginx
 ```
 
 ## SSL/HTTPS (prod)
 
-1. Получите сертификаты (Let's Encrypt и т.п.).
-2. Положите файлы в `nginx/ssl/` (папка в `.gitignore` — не коммитить ключи).
-3. В `nginx/nginx.conf` указаны пути к `lifedream.tech` и `habits.lifedream.tech`; при добавлении доменов добавьте свои `ssl_certificate` / `ssl_certificate_key`.
-4. Перезапуск: `docker-compose restart nginx`.
+1. Obtain certificates (e.g. Let’s Encrypt).
+2. Place files in `nginx/ssl/` (folder is in `.gitignore` — do not commit keys).
+3. In `nginx/nginx.conf` paths for `lifedream.tech` and `habits.lifedream.tech` are set; add your `ssl_certificate` / `ssl_certificate_key` for new domains.
+4. Restart: `docker-compose restart nginx`.
 
-Подробнее — в **NGINX_GUIDE.md** (wildcard vs отдельные сертификаты, копирование на сервер).
+Details: [NGINX_GUIDE.md](NGINX_GUIDE.md) (wildcard vs per-domain certs, copying to server).
 
-> **Dev vs prod:** в dev SSL обычно не используется; в prod обязателен для доменов.
+> **Dev vs prod:** SSL is typically not used in dev; required in prod.
 
 ## CI/CD
 
-В `.github/workflows/deploy.yml` настроен деплой при push в `main`/`master`: SSH на сервер, обновление репозиториев (deployment, habits-api, habits, go-angular-pg), затем `docker-compose down && build && up -d` (сборка с кэшем слоёв). Серверные пути и имена репозиториев зашиты в workflow — при отличии dev/prod окружений их можно вынести в переменные/секреты.
+`.github/workflows/deploy.yml`: on push to `main`/`master`, SSH to server, update repos (deployment, habits-api, habits, go-angular-pg), then `docker-compose down && build && up -d` (build with layer cache). Server paths and repo names are in the workflow; move to variables/secrets if you need different dev/prod.
 
-## Best Practices
+## Best practices
 
-1. **Dev и prod:** явно разделяйте конфиги (отдельные compose и nginx-файлы) и не полагайтесь на то, что они совпадают.
-2. **Версионирование:** версии проектов фиксируются на сервере через `git pull` в нужных папках (submodules сейчас не используются).
-3. **Dockerfile:** каждый проект собирает свой образ; инфраструктура только в deployment.
-4. **Переменные окружения:** используйте `.env` для паролей и URL; не коммитить секреты.
-5. **Документация:** структуру и отличия dev/prod документируйте в README и NGINX_GUIDE.md.
+1. **Dev and prod:** keep configs separate (different compose and nginx files); don’t assume they match.
+2. **Versions:** project versions are fixed on the server via `git pull` in each folder (submodules not used).
+3. **Dockerfile:** each project builds its own image; only infrastructure lives in deployment.
+4. **Env:** use `.env` for passwords and URLs; don’t commit secrets.
+5. **Docs:** keep [README](README.md) and [README.ru.md](README.ru.md) and [NGINX_GUIDE.md](NGINX_GUIDE.md) in sync for structure and dev/prod differences.
 
 ## Troubleshooting
 
-### Проблемы с путями в docker-compose
+### docker-compose paths
 
-Пути в `context:` заданы относительно каталога с `docker-compose.yml`. Проверьте:
+`context:` paths are relative to the directory containing `docker-compose.yml`. Check:
 
-- Prod: `../go-angular-pg/client`, `../habits-api`, `../habits` и т.д.
-- Dev: могут быть `../admin-panel-golang/app`, `../frontend`, `../backend` — они могут отличаться от prod.
+- Prod: `../go-angular-pg/client`, `../habits-api`, `../habits`, etc.
+- Dev: may use `../admin-panel-golang/app`, `../frontend`, `../backend` — can differ from prod.
 
-### Порт 80 занят
+### Port 80 in use
 
-См. **NGINX_GUIDE.md** — раздел «Ошибка address already in use». В dev используется порт 8080, чтобы избежать конфликта.
+See [NGINX_GUIDE.md](NGINX_GUIDE.md) — “address already in use”. Dev uses port 8080 to avoid conflict.
 
-### Права на файлы
+### File permissions
 
 ```bash
 sudo chown -R $USER:$USER nginx/logs
 ```
 
-## Полезные команды
+## Useful commands
 
 ```bash
 # Prod
@@ -222,6 +222,6 @@ docker-compose up -d
 docker compose -f docker-compose.dev.yml config
 docker compose -f docker-compose.dev.yml up -d --build
 
-# Общая очистка
+# Cleanup
 docker system prune -a
 ```
