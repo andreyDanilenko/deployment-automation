@@ -42,6 +42,8 @@ services:
       POSTGRES_PASSWORD: habits_pass
       POSTGRES_DB: habits_db
     restart: unless-stopped
+    ports:              
+      - "5432:5432"
     volumes:
       - habits_postgres_data:/var/lib/postgresql/data
 

@@ -40,3 +40,22 @@
 
 После правок конфига перезапуск nginx в композе:
 `docker compose -f docker-compose.dev.yml restart nginx` (или пересборка/подъём стека).
+
+## Ошибка «address already in use» на порту 80
+
+Если при `docker compose up nginx` появляется **failed to bind host port for 0.0.0.0:80: address already in use**, порт 80 на хосте занят другим процессом (не контейнерами из этого compose — у них только `expose`, без `ports`).
+
+**Узнать, кто занял порт:**
+```bash
+sudo ss -tlnp | grep :80
+# или
+sudo lsof -i :80
+# или контейнеры с портом 80
+docker ps --format "table {{.Names}}\t{{.Ports}}" | grep 80
+```
+
+**Что делать:**
+- Системный nginx/apache: `sudo systemctl stop nginx` (или `apache2`), при необходимости `sudo systemctl disable nginx`.
+- Другой Docker-проект: зайти в его каталог и выполнить `docker compose down`, либо остановить контейнер: `docker stop <имя>`.
+
+После освобождения порта: `docker compose up -d nginx`.
