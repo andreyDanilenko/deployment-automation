@@ -84,7 +84,9 @@ jobs:
             if [ -f "docker-compose.yml" ]; then
               echo "Собираем и запускаем контейнеры..."
               docker-compose down
-              docker-compose build --no-cache
+              # Сборка с кэшем слоёв: повторные деплои будут быстрее. Полная пересборка: docker-compose build --no-cache
+              export DOCKER_BUILDKIT=1
+              docker-compose build
               docker-compose up -d
               
               echo "Проверяем статус..."
