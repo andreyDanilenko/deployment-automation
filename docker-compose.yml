@@ -59,6 +59,7 @@ services:
     networks:
       - app-network
 
+
   habits_api:
     container_name: habits_api
     build:
