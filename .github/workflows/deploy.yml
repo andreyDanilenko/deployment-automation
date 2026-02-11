@@ -59,6 +59,8 @@ jobs:
             if [ ! -d ".git" ]; then
               git clone https://github.com/andreyDanilenko/habits-api.git .
             else
+              git fetch --all
+              git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
@@ -67,6 +69,8 @@ jobs:
             if [ ! -d ".git" ]; then
               git clone https://github.com/andreyDanilenko/habits-client.git .
             else
+              git fetch --all
+              git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
@@ -75,6 +79,8 @@ jobs:
             if [ ! -d ".git" ]; then
               git clone https://github.com/andreyDanilenko/go-angular-pg.git .
             else
+              git fetch --all
+              git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
@@ -84,9 +90,8 @@ jobs:
             if [ -f "docker-compose.yml" ]; then
               echo "Собираем и запускаем контейнеры..."
               docker-compose down
-              # Сборка с кэшем слоёв: повторные деплои будут быстрее. Полная пересборка: docker-compose build --no-cache
               export DOCKER_BUILDKIT=1
-              docker-compose build
+              docker-compose build --no-cache
               docker-compose up -d
               
               echo "Проверяем статус..."
