@@ -3,28 +3,18 @@ version: '3.8'
 services:
   article_db:
     container_name: article_service_db
-    image: postgres:17.4
+    image: postgres:${POSTGRES_VERSION:-17.4}
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: my_pass
-      POSTGRES_DB: auth_service
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     restart: unless-stopped
     volumes:
       - article_postgres_data:/var/lib/postgresql/data
-    networks:
+    networks:               
       - app-network
-
-  # Фронтенд основного домена (Angular — статика, как в рабочем admin-panel-golang)
-  article_frontend:
-    container_name: article_frontend
-    build:
-      context: ../go-angular-pg/client
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    networks:
-      - app-network
-    expose:
-      - "80"
+    ports:
+      - "5432:5432"
 
   article_app:
     container_name: auth_service_app
@@ -33,32 +23,46 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DB_HOST: article_db
-      DB_USER: postgres
-      DB_PASSWORD: my_pass
-      DB_NAME: auth_service
-      DB_PORT: 5432
+      # Database
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      
+      # SMTP
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      
+      APP_ENV: ${APP_ENV}
     depends_on:
       - article_db
-    networks:
+    networks:               
       - app-network
     expose:
       - "8080"
 
-  # --- НОВЫЙ ПРОЕКТ (Habits Service) ---
   habits_db:
     container_name: habits_service_db
-    image: postgres:17.4
+    image: postgres:${POSTGRES_VERSION:-17.4}
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: habits_pass
-      POSTGRES_DB: habits_db
+      POSTGRES_USER: ${HABITS_DB_USER}
+      POSTGRES_PASSWORD: ${HABITS_DB_PASSWORD}
+      POSTGRES_DB: ${HABITS_DB_NAME}
     restart: unless-stopped
+    ports:              
+      - "5433:5432"
+    networks:               
+      - app-network
     volumes:
       - habits_postgres_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-
 
   habits_api:
     container_name: habits_api
@@ -67,14 +71,23 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DB_HOST: habits_db
-      DB_USER: postgres
-      DB_PASSWORD: habits_pass
-      DB_NAME: habits_db
-      DB_PORT: 5432
+      SERVER_HOST: ${HABITS_SERVER_HOST}
+      SERVER_PORT: ${HABITS_SERVER_PORT}
+      DB_HOST: ${HABITS_DB_HOST}
+      DB_PORT: ${HABITS_DB_PORT}
+      DB_USER: ${HABITS_DB_USER}
+      DB_PASSWORD: ${HABITS_DB_PASSWORD}
+      DB_NAME: ${HABITS_DB_NAME}
+      LOGS_DIR: ${HABITS_LOGS_DIR}
+      JWT_SECRET_KEY: ${HABITS_JWT_SECRET}
+      JWT_EXPIRATION: ${HABITS_JWT_EXPIRATION}
+      REFRESH_EXPIRATION: ${HABITS_REFRESH_EXPIRATION}
+      COOKIE_DOMAIN: ${HABITS_COOKIE_DOMAIN}
+      SECURE_COOKIES: ${HABITS_SECURE_COOKIES}
+      APP_ENV: ${APP_ENV}
     depends_on:
       - habits_db
-    networks:
+    networks:               
       - app-network
     expose:
       - "8080"
@@ -85,12 +98,28 @@ services:
       context: ../habits
       dockerfile: Dockerfile
     restart: unless-stopped
-    networks:
+    environment:
+      - NODE_ENV=${APP_ENV:-development}
+      - VITE_API_URL=/api
+    networks:               
       - app-network
     expose:
       - "80"
 
-  # --- ЕДИНЫЙ NGINX Reverse Proxy ---
+  article_frontend:
+    container_name: article_frontend
+    build:
+      context: ../go-angular-pg/client
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=${APP_ENV:-development}
+      - API_URL=/auth
+    networks:               
+      - app-network
+    expose:
+      - "80"
+
   nginx:
     image: nginx:alpine
     container_name: main_nginx
@@ -101,12 +130,12 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./nginx/ssl:/etc/nginx/ssl
     depends_on:
-      - article_frontend
       - article_app
-      - habits_frontend
       - habits_api
+      - article_frontend
+      - habits_frontend
     restart: unless-stopped
-    networks:
+    networks:               
       - app-network
 
 networks:
@@ -115,4 +144,6 @@ networks:
 
 volumes:
   article_postgres_data:
+    name: article_postgres_data
   habits_postgres_data:
+    name: habits_postgres_data
