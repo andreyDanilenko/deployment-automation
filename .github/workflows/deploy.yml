@@ -7,6 +7,13 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  PROJECT_DIR: /root/project
+  DEPLOY_DIR: deployment
+  API_DIR: habits-api
+  CLIENT_DIR: habits
+  GO_ANGULAR_DIR: go-angular-pg
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -23,10 +30,16 @@ jobs:
           script: |
             echo "=== Начало деплоя ==="
             
-            # Переходим в папку проекта
-            cd /root/project/deployment
+            # Создаем основную папку проекта если её нет
+            if [ ! -d "${{ env.PROJECT_DIR }}" ]; then
+              echo "📁 Создаем папку проекта ${{ env.PROJECT_DIR }}"
+              mkdir -p ${{ env.PROJECT_DIR }}
+            fi
             
+            # Создаем и переходим в папку deployment
             echo "=== Обновляем репозиторий deployment ==="
+            mkdir -p ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
+            cd ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             
             # Если папка пустая - клонируем
             if [ ! -d ".git" ]; then
@@ -55,37 +68,46 @@ jobs:
             git log --oneline -3
             
             echo "=== Обновляем habits-api репозиторий ==="
-            cd /root/project/habits-api
+            mkdir -p ${{ env.PROJECT_DIR }}/${{ env.API_DIR }}
+            cd ${{ env.PROJECT_DIR }}/${{ env.API_DIR }}
             if [ ! -d ".git" ]; then
+              echo "❌ Клонируем habits-api..."
               git clone https://github.com/andreyDanilenko/habits-api.git .
             else
+              echo "✅ Обновляем habits-api..."
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
             echo "=== Обновляем habits-client репозиторий ==="
-            cd /root/project/habits
+            mkdir -p ${{ env.PROJECT_DIR }}/${{ env.CLIENT_DIR }}
+            cd ${{ env.PROJECT_DIR }}/${{ env.CLIENT_DIR }}
             if [ ! -d ".git" ]; then
+              echo "❌ Клонируем habits-client..."
               git clone https://github.com/andreyDanilenko/habits-client.git .
             else
+              echo "✅ Обновляем habits-client..."
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
             echo "=== Обновляем go-angular-pg репозиторий ==="
-            cd /root/project/go-angular-pg
+            mkdir -p ${{ env.PROJECT_DIR }}/${{ env.GO_ANGULAR_DIR }}
+            cd ${{ env.PROJECT_DIR }}/${{ env.GO_ANGULAR_DIR }}
             if [ ! -d ".git" ]; then
+              echo "❌ Клонируем go-angular-pg..."
               git clone https://github.com/andreyDanilenko/go-angular-pg.git .
             else
+              echo "✅ Обновляем go-angular-pg..."
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
             echo "=== Запускаем контейнеры ==="
-            cd /root/project/deployment
+            cd ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             
             if [ -f "docker-compose.yml" ]; then
               echo "Собираем и запускаем контейнеры..."
