@@ -146,4 +146,4 @@ volumes:
   article_postgres_data:
     name: article_postgres_data
   habits_postgres_data:
-    name: habits_postgres_data
+    name: deployment_habits_postgres_data
