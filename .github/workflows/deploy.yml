@@ -128,18 +128,6 @@ jobs:
               ls -la
             fi
             
-            echo "=== Очистка неиспользуемых образов и контейнеров ==="
-            # Удаляем остановленные контейнеры
-            docker container prune -f
-            # Удаляем неиспользуемые образы (освобождаем место на диске)
-            docker image prune -a -f
-            # Удаляем неиспользуемые сети
-            docker network prune -f
-            # Удаляем только неиспользуемые volumes (postgres_data остаётся, т.к. используется)
-            docker volume prune -f
-            echo "✅ Очистка завершена"
-            echo "Оставшиеся volumes:"
-            docker volume ls
             
             echo "=== Проверяем volumes ==="
             docker volume ls | grep postgres_data
