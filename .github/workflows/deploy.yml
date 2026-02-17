@@ -28,115 +28,115 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.DEPLOY_SECRET_KEY }}
           script: |
-            echo "=== Начало деплоя ==="
+            echo "=== Starting deployment ==="
             
-            # Создаем основную папку проекта если её нет
+            # Create main project folder if it doesn't exist
             if [ ! -d "${{ env.PROJECT_DIR }}" ]; then
-              echo "📁 Создаем папку проекта ${{ env.PROJECT_DIR }}"
+              echo "📁 Creating project folder ${{ env.PROJECT_DIR }}"
               mkdir -p ${{ env.PROJECT_DIR }}
             fi
             
-            # Создаем и переходим в папку deployment
-            echo "=== Обновляем репозиторий deployment ==="
+            # Create and navigate to deployment folder
+            echo "=== Updating deployment repository ==="
             mkdir -p ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             cd ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             
-            # Если папка пустая - клонируем
+            # If folder is empty - clone
             if [ ! -d ".git" ]; then
-              echo "❌ Git репозиторий не найден. Клонируем..."
+              echo "❌ Git repository not found. Cloning..."
               git clone https://github.com/andreyDanilenko/deployment-automation.git .
             else
-              echo "✅ Git репозиторий найден. Обновляем..."
-              # Сохраняем важные файлы которые не в git
+              echo "✅ Git repository found. Updating..."
+              # Save important files that are not in git
               if [ -f ".env" ]; then
                 cp .env /tmp/.env.backup
-                echo "✅ .env файл сохранен"
+                echo "✅ .env file saved"
               fi
               
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
               
-              # Восстанавливаем .env если был
+              # Restore .env if it existed
               if [ -f "/tmp/.env.backup" ]; then
                 mv /tmp/.env.backup .env
-                echo "✅ .env файл восстановлен"
+                echo "✅ .env file restored"
               fi
             fi
             
-            echo "=== Проверяем изменения ==="
+            echo "=== Checking recent changes ==="
             git log --oneline -3
             
-            echo "=== Обновляем habits-api репозиторий ==="
+            echo "=== Updating habits-api repository ==="
             mkdir -p ${{ env.PROJECT_DIR }}/${{ env.API_DIR }}
             cd ${{ env.PROJECT_DIR }}/${{ env.API_DIR }}
             if [ ! -d ".git" ]; then
-              echo "❌ Клонируем habits-api..."
+              echo "❌ Cloning habits-api..."
               git clone https://github.com/andreyDanilenko/habits-api.git .
             else
-              echo "✅ Обновляем habits-api..."
+              echo "✅ Updating habits-api..."
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
-            echo "=== Обновляем habits-client репозиторий ==="
+            echo "=== Updating habits-client repository ==="
             mkdir -p ${{ env.PROJECT_DIR }}/${{ env.CLIENT_DIR }}
             cd ${{ env.PROJECT_DIR }}/${{ env.CLIENT_DIR }}
             if [ ! -d ".git" ]; then
-              echo "❌ Клонируем habits-client..."
+              echo "❌ Cloning habits-client..."
               git clone https://github.com/andreyDanilenko/habits-client.git .
             else
-              echo "✅ Обновляем habits-client..."
+              echo "✅ Updating habits-client..."
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
-            echo "=== Обновляем go-angular-pg репозиторий ==="
+            echo "=== Updating go-angular-pg repository ==="
             mkdir -p ${{ env.PROJECT_DIR }}/${{ env.GO_ANGULAR_DIR }}
             cd ${{ env.PROJECT_DIR }}/${{ env.GO_ANGULAR_DIR }}
             if [ ! -d ".git" ]; then
-              echo "❌ Клонируем go-angular-pg..."
+              echo "❌ Cloning go-angular-pg..."
               git clone https://github.com/andreyDanilenko/go-angular-pg.git .
             else
-              echo "✅ Обновляем go-angular-pg..."
+              echo "✅ Updating go-angular-pg..."
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
               git pull origin master 2>/dev/null || git pull origin/main
             fi
             
-            echo "=== Запускаем контейнеры ==="
+            echo "=== Starting containers ==="
             cd ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             
             if [ -f "docker-compose.yml" ]; then
-              echo "Собираем и запускаем контейнеры..."
+              echo "Building and starting containers..."
               docker-compose down
               export DOCKER_BUILDKIT=1
               docker-compose build --no-cache
               docker-compose up -d
               
-              echo "Проверяем статус..."
+              echo "Checking status..."
               docker-compose ps
               
-              echo "Проверяем логи nginx..."
+              echo "Checking nginx logs..."
               docker-compose logs --tail=50 nginx
               
-              echo "✅ Контейнеры обновлены и запущены"
+              echo "✅ Containers updated and started"
             else
-              echo "⚠️ docker-compose.yml не найден"
+              echo "⚠️ docker-compose.yml not found"
               ls -la
             fi
             
             
-            echo "=== Проверяем volumes ==="
+            echo "=== Checking volumes ==="
             docker volume ls | grep postgres_data
             
-            echo "=== Проверяем доступность сервисов ==="
+            echo "=== Checking service availability ==="
             echo "Article Service:"
-            curl -I https://lifedream.tech || echo "Не доступен"
+            curl -I https://lifedream.tech || echo "Not available"
             
             echo "Habits Service:"
-            curl -I https://habits.lifedream.tech || echo "Не доступен"
+            curl -I https://habits.lifedream.tech || echo "Not available"
             
-            echo "=== Деплой завершен ==="
+            echo "=== Deployment completed ==="
