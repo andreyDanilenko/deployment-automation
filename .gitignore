@@ -5,4 +5,4 @@ nginx/ssl/*
 !nginx/ssl/.gitkeep
 /nginx/nginx.dev.conf
 
-
+test/nginx/ssl/*
