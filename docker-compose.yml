@@ -92,9 +92,8 @@ services:
 
   habits_frontend:
     container_name: habits_frontend
-    build:
-      context: ../habits
-      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/habits-client:latest
+    pull_policy: always
     restart: unless-stopped
     environment:
       - NODE_ENV=${APP_ENV:-development}

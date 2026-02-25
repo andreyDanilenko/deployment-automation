@@ -14,7 +14,6 @@ on:
 env:
   PROJECT_DIR: /root/project
   DEPLOY_DIR: deployment
-  CLIENT_DIR: habits
 
 jobs:
   deploy:
@@ -65,26 +64,13 @@ jobs:
               echo "✅ .env file restored"
             fi
             
-            # Обновляем habits-client (пока не в образе)
-            echo "=== Updating habits-client repository ==="
-            mkdir -p ${{ env.PROJECT_DIR }}/${{ env.CLIENT_DIR }}
-            cd ${{ env.PROJECT_DIR }}/${{ env.CLIENT_DIR }}
-            if [ ! -d ".git" ]; then
-              echo "❌ Cloning habits-client..."
-              git clone https://github.com/andreyDanilenko/habits-client.git .
-            else
-              echo "✅ Updating habits-client..."
-              git fetch --all
-              git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
-              git pull origin master 2>/dev/null || git pull origin main
-            fi
-            
             # Возвращаемся в папку deployment для запуска контейнеров
             cd ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             
             # Тянем ВСЕ образы
             echo "=== Pulling latest Docker images ==="
             docker-compose pull habits_api
+            docker-compose pull habits_frontend
             docker-compose pull article_app
             docker-compose pull article_frontend
             
