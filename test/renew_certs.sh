@@ -48,6 +48,8 @@ ls -la "$SSL_DIR"
 # Функция отправки в Telegram
 send_telegram() {
     local message="$1"
+    message=$(echo "$message" | sed 's/%0A/\n/g')
+    
     curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
         -d chat_id="${TELEGRAM_CHAT_ID}" \
         -d text="$message" \
