@@ -44,3 +44,27 @@ cd "$PROJECT_DIR" && docker-compose up -d
 
 log "=== ТЕСТ ЗАВЕРШЕН ==="
 ls -la "$SSL_DIR"
+
+# Функция отправки в Telegram
+send_telegram() {
+    local message="$1"
+    curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+        -d chat_id="${TELEGRAM_CHAT_ID}" \
+        -d text="$message" \
+        -d parse_mode="HTML" > /dev/null
+}
+
+# В конце скрипта добавить:
+SUMMARY="📋 <b>Отчет об обновлении сертификатов</b>%0A"
+SUMMARY+="📅 $(date '+%Y-%m-%d %H:%M:%S')%0A%0A"
+
+# Добавляем информацию о каждом домене
+for DOMAIN in "${DOMAINS[@]}"; do
+    if [ -f "$SSL_DIR/$DOMAIN.crt" ]; then
+        EXPIRY=$(openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -noout -enddate | cut -d= -f2)
+        SUMMARY+="🔑 <b>$DOMAIN</b>%0A"
+        SUMMARY+="   Истекает: $EXPIRY%0A%0A"
+    fi
+done
+
+send_telegram "$SUMMARY"
