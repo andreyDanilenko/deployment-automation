@@ -18,9 +18,8 @@ services:
 
   article_app:
     container_name: auth_service_app
-    build:
-      context: ../go-angular-pg/app
-      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/go-angular-backend:latest
+    pull_policy: always
     restart: unless-stopped
     environment:
       # Database
@@ -107,9 +106,8 @@ services:
 
   article_frontend:
     container_name: article_frontend
-    build:
-      context: ../go-angular-pg/client
-      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/go-angular-frontend:latest
+    pull_policy: always
     restart: unless-stopped
     environment:
       - NODE_ENV=${APP_ENV:-development}
