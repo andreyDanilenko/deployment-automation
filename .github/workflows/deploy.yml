@@ -1,3 +1,4 @@
+# deploy.yml
 name: Deploy Infrastructure
 
 on:
@@ -5,22 +6,30 @@ on:
     branches:
       - master
       - main
+  workflow_run:
+    workflows: ["Build and Push Habits API Image"]
+    types:
+      - completed
   workflow_dispatch:
 
 env:
   PROJECT_DIR: /root/project
   DEPLOY_DIR: deployment
-  API_DIR: habits-api
   CLIENT_DIR: habits
   GO_ANGULAR_DIR: go-angular-pg
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    
     steps:
-      - name: Checkout code
+      - name: Checkout deployment repository
         uses: actions/checkout@v3
-
+        with:
+          repository: andreyDanilenko/deployment-automation
+          path: deployment
+      
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -28,57 +37,39 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.DEPLOY_SECRET_KEY }}
           script: |
-            echo "=== Starting deployment ==="
+            echo "=== Starting deployment with Docker images ==="
             
-            # Create main project folder if it doesn't exist
-            if [ ! -d "${{ env.PROJECT_DIR }}" ]; then
-              echo "📁 Creating project folder ${{ env.PROJECT_DIR }}"
-              mkdir -p ${{ env.PROJECT_DIR }}
-            fi
-            
-            # Create and navigate to deployment folder
-            echo "=== Updating deployment repository ==="
+            # Создаем основную папку проекта
             mkdir -p ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             cd ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             
-            # If folder is empty - clone
+            # Обновляем deployment файлы
+            echo "=== Updating deployment configuration ==="
             if [ ! -d ".git" ]; then
-              echo "❌ Git repository not found. Cloning..."
+              echo "❌ Cloning deployment repository..."
               git clone https://github.com/andreyDanilenko/deployment-automation.git .
             else
-              echo "✅ Git repository found. Updating..."
-              # Save important files that are not in git
-              if [ -f ".env" ]; then
-                cp .env /tmp/.env.backup
-                echo "✅ .env file saved"
-              fi
-              
-              git fetch --all
-              git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
-              git pull origin master 2>/dev/null || git pull origin/main
-              
-              # Restore .env if it existed
-              if [ -f "/tmp/.env.backup" ]; then
-                mv /tmp/.env.backup .env
-                echo "✅ .env file restored"
-              fi
+              echo "✅ Updating deployment repository..."
+              git pull origin master 2>/dev/null || git pull origin main
             fi
             
-            echo "=== Checking recent changes ==="
-            git log --oneline -3
-            
-            echo "=== Updating habits-api repository ==="
-            mkdir -p ${{ env.PROJECT_DIR }}/${{ env.API_DIR }}
-            cd ${{ env.PROJECT_DIR }}/${{ env.API_DIR }}
-            if [ ! -d ".git" ]; then
-              echo "❌ Cloning habits-api..."
-              git clone https://github.com/andreyDanilenko/habits-api.git .
-            else
-              echo "✅ Updating habits-api..."
-              git fetch --all
-              git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
-              git pull origin master 2>/dev/null || git pull origin/main
+            # Сохраняем .env если есть
+            if [ -f ".env" ]; then
+              cp .env /tmp/.env.backup
+              echo "✅ .env file saved"
             fi
+            
+            # Загружаем последние изменения
+            git fetch --all
+            git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
+            
+            # Восстанавливаем .env
+            if [ -f "/tmp/.env.backup" ]; then
+              mv /tmp/.env.backup .env
+              echo "✅ .env file restored"
+            fi
+            
+            # === ВОССТАНАВЛИВАЕМ ОБНОВЛЕНИЕ ОСТАЛЬНЫХ РЕПОЗИТОРИЕВ ===
             
             echo "=== Updating habits-client repository ==="
             mkdir -p ${{ env.PROJECT_DIR }}/${{ env.CLIENT_DIR }}
@@ -90,7 +81,7 @@ jobs:
               echo "✅ Updating habits-client..."
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
-              git pull origin master 2>/dev/null || git pull origin/main
+              git pull origin master 2>/dev/null || git pull origin main
             fi
             
             echo "=== Updating go-angular-pg repository ==="
@@ -103,40 +94,44 @@ jobs:
               echo "✅ Updating go-angular-pg..."
               git fetch --all
               git reset --hard origin/master 2>/dev/null || git reset --hard origin/main
-              git pull origin master 2>/dev/null || git pull origin/main
+              git pull origin master 2>/dev/null || git pull origin main
             fi
             
-            echo "=== Starting containers ==="
+            # Возвращаемся в папку deployment для запуска контейнеров
             cd ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             
-            if [ -f "docker-compose.yml" ]; then
-              echo "Building and starting containers..."
-              docker-compose down
-              export DOCKER_BUILDKIT=1
-              docker-compose build --no-cache
-              docker-compose up -d
-              
-              echo "Checking status..."
-              docker-compose ps
-              
-              echo "Checking nginx logs..."
-              docker-compose logs --tail=50 nginx
-              
-              echo "✅ Containers updated and started"
-            else
-              echo "⚠️ docker-compose.yml not found"
-              ls -la
-            fi
+            # Обновляем образы и перезапускаем контейнеры
+            echo "=== Pulling latest Docker images ==="
+            docker-compose pull habits_api
             
+            echo "=== Recreating containers ==="
+            # Останавливаем все контейнеры
+            docker-compose down
             
-            echo "=== Checking volumes ==="
-            docker volume ls | grep postgres_data
+            # Запускаем все контейнеры заново
+            # habits_api использует образ из Docker Hub
+            # Остальные собираются из локального кода
+            export DOCKER_BUILDKIT=1
+            docker-compose up -d --build
+            
+            # Проверяем статус
+            echo "=== Checking containers status ==="
+            docker-compose ps
+            
+            echo "=== Checking habits_api logs ==="
+            docker-compose logs --tail=50 habits_api
+            
+            echo "=== Checking nginx logs ==="
+            docker-compose logs --tail=50 nginx
             
             echo "=== Checking service availability ==="
             echo "Article Service:"
             curl -I https://lifedream.tech || echo "Not available"
             
             echo "Habits Service:"
-            curl -I https://habits.lifedream.tech || echo "Not available"
+            curl -I https://habits.lifedream.tech/api/health || echo "⚠️ Health check failed"
+            
+            echo "=== Checking volumes ==="
+            docker volume ls | grep postgres_data
             
             echo "=== Deployment completed ==="

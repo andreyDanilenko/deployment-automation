@@ -66,9 +66,8 @@ services:
 
   habits_api:
     container_name: habits_api
-    build:
-      context: ../habits-api
-      dockerfile: Dockerfile
+    image: ${DOCKER_USERNAME}/habits-api:latest
+    pull_policy: always
     restart: unless-stopped
     environment:
       SERVER_HOST: ${HABITS_SERVER_HOST}
