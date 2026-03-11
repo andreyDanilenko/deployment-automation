@@ -83,6 +83,14 @@ services:
       COOKIE_DOMAIN: ${HABITS_COOKIE_DOMAIN}
       SECURE_COOKIES: ${HABITS_SECURE_COOKIES}
       APP_ENV: ${APP_ENV}
+      # Email verification
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-true}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      REGISTRATION_TOKEN_LIFETIME: ${REGISTRATION_TOKEN_LIFETIME:-24h}
+      VERIFICATION_BASE_URL: ${VERIFICATION_BASE_URL:-http://localhost:3000}
     depends_on:
       - habits_db
     networks:               
