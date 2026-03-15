@@ -17,7 +17,8 @@ env:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest    
+    runs-on: ubuntu-latest
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     steps:
       - name: Checkout deployment repository
         uses: actions/checkout@v3
@@ -71,6 +72,7 @@ jobs:
             echo "=== Pulling latest Docker images ==="
             docker-compose pull habits_api
             docker-compose pull habits_frontend
+            docker-compose pull nest_satellite
             docker-compose pull article_app
             docker-compose pull article_frontend
             
