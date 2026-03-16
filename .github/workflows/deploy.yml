@@ -68,23 +68,23 @@ jobs:
             # Возвращаемся в папку deployment для запуска контейнеров
             cd ${{ env.PROJECT_DIR }}/${{ env.DEPLOY_DIR }}
             
-            # Тянем ВСЕ образы
+            # Тянем ВСЕ образы (docker compose v2 — без ошибки ContainerConfig)
             echo "=== Pulling latest Docker images ==="
-            docker-compose pull habits_api
-            docker-compose pull habits_frontend
-            docker-compose pull nest_satellite
-            docker-compose pull article_app
-            docker-compose pull article_frontend
+            docker compose pull habits_api
+            docker compose pull habits_frontend
+            docker compose pull nest_satellite
+            docker compose pull article_app
+            docker compose pull article_frontend
             
             # Перезапускаем контейнеры
             echo "=== Recreating containers ==="
-            docker-compose down
+            docker compose down
             export DOCKER_BUILDKIT=1
-            docker-compose up -d --build
+            docker compose up -d --build
             
             # Проверки
             echo "=== Checking containers status ==="
-            docker-compose ps
+            docker compose ps
             
             echo "=== Checking service availability ==="
             echo "Article Service:"

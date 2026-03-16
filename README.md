@@ -36,9 +36,9 @@ This repo deploys **two applications** behind one Nginx.
 3. **From deployment folder:**
    ```bash
    cd deployment
-   docker-compose up -d
+   docker compose up -d
    ```
-   Compose builds images from `../go-angular-pg`, `../habits`, `../habits-api` and runs Nginx on 80/443.
+   **Важно:** используйте `docker compose` (v2), а не `docker-compose` (v1) — иначе ошибка `ContainerConfig`. Или запустите `./deploy.sh`.
 
 **Dev (local):** use `docker-compose.dev.yml`; app is on `http://localhost:8080` (main site at `/`, habits at `/habits/`, API at `/habits-api/`).
 
@@ -58,9 +58,14 @@ This repo deploys **two applications** behind one Nginx.
 
 ## Useful commands
 
+Используйте **docker compose** (v2), не docker-compose — v1 даёт ошибку ContainerConfig с новыми образами.
+
 ```bash
-docker-compose up -d
-docker-compose down
-docker-compose build
-docker-compose logs -f nginx
+docker compose up -d
+docker compose down
+docker compose build
+docker compose logs -f nginx
+
+# Или скрипт:
+./deploy.sh
 ```
