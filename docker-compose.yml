@@ -115,11 +115,15 @@ services:
       REGISTRATION_TOKEN_LIFETIME: ${REGISTRATION_TOKEN_LIFETIME:-24h}
       VERIFICATION_BASE_URL: ${VERIFICATION_BASE_URL:-http://localhost:3000}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      # Явный каталог; тот же путь в volume — файлы переживают пересборку образа
+      UPLOADS_DIR: /app/uploads
     depends_on:
       - habits_db
       - redis
     networks:               
       - app-network
+    volumes:
+      - habits_uploads_data:/app/uploads
     expose:
       - "8080"
 
@@ -177,3 +181,5 @@ volumes:
     name: article_postgres_data
   habits_postgres_data:
     name: deployment_habits_postgres_data
+  habits_uploads_data:
+    name: deployment_habits_uploads_data
