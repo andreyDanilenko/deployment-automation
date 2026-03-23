@@ -117,6 +117,9 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       # Явный каталог; тот же путь в volume — файлы переживают пересборку образа
       UPLOADS_DIR: /app/uploads
+      # Telegram
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
     depends_on:
       - habits_db
       - redis
