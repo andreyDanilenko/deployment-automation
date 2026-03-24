@@ -60,26 +60,23 @@ cert_exists() {
     [ -f "$SSL_DIR/config/live/$domain/privkey.pem" ]
 }
 
-# Функция получения сертификата для домена
+# Функция получения сертификата для домена (первый выпуск / после удаления live)
 get_certificate() {
     local domain="$1"
-    log "Создаем сертификат для $domain"
-    certbot certonly --standalone \
+    log "Выпускаем сертификат (certonly) для $domain"
+    if certbot certonly --standalone \
         -d "$domain" \
         --config-dir "$SSL_DIR/config" \
         --work-dir "$SSL_DIR/work" \
         --logs-dir "$SSL_DIR/logs" \
         --agree-tos \
         --email "$EMAIL" \
-        --non-interactive
-    
-    if [ $? -eq 0 ]; then
+        --non-interactive; then
         log "✅ Сертификат для $domain создан"
         return 0
-    else
-        log "❌ Ошибка при создании сертификата для $domain"
-        return 1
     fi
+    log "❌ Ошибка при создании сертификата для $domain"
+    return 1
 }
 
 # Начало
@@ -97,47 +94,60 @@ fi
 
 log "✅ Контейнеры остановлены"
 
-# 2. Проверяем каждый домен и получаем/обновляем сертификаты
-NEEDS_RENEW=false
+# 2. Для каждого домена: нет в certbot live → certonly; хотя бы один уже есть → renew для продления
+HAS_LIVE_CERT=false
+ISSUE_FAILED=false
 for DOMAIN in "${DOMAINS[@]}"; do
     if cert_exists "$DOMAIN"; then
-        log "🔍 Сертификат для $DOMAIN найден"
-        NEEDS_RENEW=true
+        log "🔍 Certbot live для $DOMAIN найден"
+        HAS_LIVE_CERT=true
     else
-        log "⚠️ Сертификат для $DOMAIN НЕ НАЙДЕН"
-        get_certificate "$DOMAIN"
+        log "⚠️ Certbot live для $DOMAIN нет — выпускаем новый"
+        if ! get_certificate "$DOMAIN"; then
+            ISSUE_FAILED=true
+        fi
     fi
 done
 
-# 3. Если все сертификаты существуют, выполняем обновление
-if [ "$NEEDS_RENEW" = true ]; then
-    log "🔄 Выполняем обновление существующих сертификатов..."
-    certbot renew --standalone \
+# 3. Продление только если в хранилище уже были какие-то сертификаты (renew бессмысленен при пустом каталоге)
+if [ "$HAS_LIVE_CERT" = true ]; then
+    log "🔄 Certbot renew (продление уже существующих)..."
+    if certbot renew --standalone \
         --config-dir "$SSL_DIR/config" \
         --work-dir "$SSL_DIR/work" \
         --logs-dir "$SSL_DIR/logs" \
-        --non-interactive
-    
-    if [ $? -eq 0 ]; then
-        log "✅ Certbot обновление выполнено"
+        --non-interactive; then
+        log "✅ certbot renew завершён"
     else
-        log "⚠️ Certbot завершился с ошибкой"
+        log "⚠️ certbot renew завершился с ошибкой (новые certonly выше могли пройти успешно)"
     fi
 fi
 
-# 4. Копируем сертификаты в папку Nginx
-log "Копируем сертификаты в $SSL_DIR..."
+# 4. Копируем fullchain/privkey в имена, которые ждёт nginx.conf
+log "Копируем сертификаты в $SSL_DIR (*.crt / *.key)..."
+MISSING_AFTER_COPY=0
 for DOMAIN in "${DOMAINS[@]}"; do
     if [ -f "$SSL_DIR/config/live/$DOMAIN/fullchain.pem" ]; then
         cp "$SSL_DIR/config/live/$DOMAIN/fullchain.pem" "$SSL_DIR/$DOMAIN.crt"
         cp "$SSL_DIR/config/live/$DOMAIN/privkey.pem" "$SSL_DIR/$DOMAIN.key"
-        log "✅ $DOMAIN: сертификаты скопированы"
+        log "✅ $DOMAIN: скопировано для Nginx"
     else
-        log "❌ $DOMAIN: сертификаты не найдены в Certbot"
+        log "❌ $DOMAIN: нет fullchain.pem в Certbot после выпуска"
+        MISSING_AFTER_COPY=$((MISSING_AFTER_COPY + 1))
     fi
 done
 
-# 5. Запускаем контейнеры
+# 5. Запуск только если все три пары файлов на месте — иначе nginx уйдёт в Restarting из‑за ssl_certificate
+if [ "$MISSING_AFTER_COPY" -gt 0 ] || [ "$ISSUE_FAILED" = true ]; then
+    log "❌ SSL неполный — docker compose up не выполняем (почините Certbot, затем: cd $PROJECT_DIR && docker compose up -d)"
+    REPORT_FAIL="⚠️ <b>renew_certs.sh: ошибка SSL</b>\n"
+    REPORT_FAIL+="🖥 $(hostname)\n"
+    REPORT_FAIL+="Не хватает сертификатов или certonly упал. См. $LOG_FILE\n"
+    REPORT_FAIL+="Контейнеры остановлены (compose down) — поднимите вручную после исправления."
+    send_telegram "$REPORT_FAIL"
+    exit 1
+fi
+
 log "Запускаем Docker контейнеры..."
 "${DOCKER_COMPOSE[@]}" up -d
 if [ $? -eq 0 ]; then
@@ -190,7 +200,7 @@ done
 # Добавляем информацию о последнем обновлении
 REPORT+="─────────────────────\n"
 REPORT+="🔄 Последнее обновление: $(date '+%d.%m.%Y %H:%M')\n"
-REPORT+="✅ Скрипт выполнен успешно"
+REPORT+="✅ Скрипт выполнен успешно (все домены на месте, compose up выполнен)"
 
 # Отправляем отчет
 send_telegram "$REPORT"
