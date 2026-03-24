@@ -3,10 +3,6 @@
 # ==============================================
 # ОСНОВНОЙ СКРИПТ ДЛЯ СЕРВЕРА С ОТПРАВКОЙ В TELEGRAM
 # ==============================================
-# Путь к каталогу deployment на VPS (где лежат docker-compose.yml и .env):
-#   export CERT_RENEW_PROJECT_DIR=/home/you/app/deployment
-# По умолчанию — как на вашем сервере; при необходимости поправьте или задайте env.
-# Требуется: docker compose v2 (`docker compose`) и certbot.
 
 # Пути
 PROJECT_DIR="${CERT_RENEW_PROJECT_DIR:-/root/project/deployment}"
@@ -57,6 +53,35 @@ send_telegram() {
     fi
 }
 
+# Функция проверки существования сертификата для домена
+cert_exists() {
+    local domain="$1"
+    [ -f "$SSL_DIR/config/live/$domain/fullchain.pem" ] && \
+    [ -f "$SSL_DIR/config/live/$domain/privkey.pem" ]
+}
+
+# Функция получения сертификата для домена
+get_certificate() {
+    local domain="$1"
+    log "Создаем сертификат для $domain"
+    certbot certonly --standalone \
+        -d "$domain" \
+        --config-dir "$SSL_DIR/config" \
+        --work-dir "$SSL_DIR/work" \
+        --logs-dir "$SSL_DIR/logs" \
+        --agree-tos \
+        --email "$EMAIL" \
+        --non-interactive
+    
+    if [ $? -eq 0 ]; then
+        log "✅ Сертификат для $domain создан"
+        return 0
+    else
+        log "❌ Ошибка при создании сертификата для $domain"
+        return 1
+    fi
+}
+
 # Начало
 log "=== ЗАПУСК ОБНОВЛЕНИЯ СЕРТИФИКАТОВ ==="
 
@@ -65,68 +90,60 @@ log "Останавливаем Docker контейнеры..."
 cd "$PROJECT_DIR" || exit 1
 "${DOCKER_COMPOSE[@]}" down
 
-if [ $? -eq 0 ]; then
-    log "✅ Контейнеры остановлены"
-    
-    # 2. Проверяем наличие сертификатов
-    if [ ! -d "$SSL_DIR/config/live" ]; then
-        log "🆕 Сертификаты не найдены. СОЗДАЕМ новые..."
-        
-        for DOMAIN in "${DOMAINS[@]}"; do
-            log "Создаем сертификат для $DOMAIN"
-            certbot certonly --standalone \
-                -d "$DOMAIN" \
-                --config-dir "$SSL_DIR/config" \
-                --work-dir "$SSL_DIR/work" \
-                --logs-dir "$SSL_DIR/logs" \
-                --agree-tos \
-                --email "$EMAIL" \
-                --non-interactive
-            
-            if [ $? -eq 0 ]; then
-                log "✅ Сертификат для $DOMAIN создан"
-            else
-                log "❌ Ошибка при создании сертификата для $DOMAIN"
-            fi
-        done
-    else
-        log "🔄 Сертификаты найдены. ОБНОВЛЯЕМ..."
-        certbot renew --standalone \
-            --config-dir "$SSL_DIR/config" \
-            --work-dir "$SSL_DIR/work" \
-            --logs-dir "$SSL_DIR/logs" \
-            --non-interactive
-        
-        if [ $? -eq 0 ]; then
-            log "✅ Certbot обновление выполнено"
-        else
-            log "⚠️ Certbot завершился с ошибкой"
-        fi
-    fi
-    
-    # 3. Копируем сертификаты в папку Nginx
-    log "Копируем сертификаты в $SSL_DIR..."
-    for DOMAIN in "${DOMAINS[@]}"; do
-        if [ -f "$SSL_DIR/config/live/$DOMAIN/fullchain.pem" ]; then
-            cp "$SSL_DIR/config/live/$DOMAIN/fullchain.pem" "$SSL_DIR/$DOMAIN.crt"
-            cp "$SSL_DIR/config/live/$DOMAIN/privkey.pem" "$SSL_DIR/$DOMAIN.key"
-            log "✅ $DOMAIN: сертификаты скопированы"
-        else
-            log "⚠️ $DOMAIN: сертификаты не найдены в Certbot"
-        fi
-    done
-    
-    # 4. Запускаем контейнеры
-    log "Запускаем Docker контейнеры..."
-    "${DOCKER_COMPOSE[@]}" up -d
-    if [ $? -eq 0 ]; then
-        log "✅ Контейнеры запущены"
-    else
-        log "❌ Ошибка при запуске контейнеров"
-        exit 1
-    fi
-else
+if [ $? -ne 0 ]; then
     log "❌ Ошибка при остановке контейнеров"
+    exit 1
+fi
+
+log "✅ Контейнеры остановлены"
+
+# 2. Проверяем каждый домен и получаем/обновляем сертификаты
+NEEDS_RENEW=false
+for DOMAIN in "${DOMAINS[@]}"; do
+    if cert_exists "$DOMAIN"; then
+        log "🔍 Сертификат для $DOMAIN найден"
+        NEEDS_RENEW=true
+    else
+        log "⚠️ Сертификат для $DOMAIN НЕ НАЙДЕН"
+        get_certificate "$DOMAIN"
+    fi
+done
+
+# 3. Если все сертификаты существуют, выполняем обновление
+if [ "$NEEDS_RENEW" = true ]; then
+    log "🔄 Выполняем обновление существующих сертификатов..."
+    certbot renew --standalone \
+        --config-dir "$SSL_DIR/config" \
+        --work-dir "$SSL_DIR/work" \
+        --logs-dir "$SSL_DIR/logs" \
+        --non-interactive
+    
+    if [ $? -eq 0 ]; then
+        log "✅ Certbot обновление выполнено"
+    else
+        log "⚠️ Certbot завершился с ошибкой"
+    fi
+fi
+
+# 4. Копируем сертификаты в папку Nginx
+log "Копируем сертификаты в $SSL_DIR..."
+for DOMAIN in "${DOMAINS[@]}"; do
+    if [ -f "$SSL_DIR/config/live/$DOMAIN/fullchain.pem" ]; then
+        cp "$SSL_DIR/config/live/$DOMAIN/fullchain.pem" "$SSL_DIR/$DOMAIN.crt"
+        cp "$SSL_DIR/config/live/$DOMAIN/privkey.pem" "$SSL_DIR/$DOMAIN.key"
+        log "✅ $DOMAIN: сертификаты скопированы"
+    else
+        log "❌ $DOMAIN: сертификаты не найдены в Certbot"
+    fi
+done
+
+# 5. Запускаем контейнеры
+log "Запускаем Docker контейнеры..."
+"${DOCKER_COMPOSE[@]}" up -d
+if [ $? -eq 0 ]; then
+    log "✅ Контейнеры запущены"
+else
+    log "❌ Ошибка при запуске контейнеров"
     exit 1
 fi
 
