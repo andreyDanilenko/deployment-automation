@@ -4,5 +4,5 @@ nginx/logs/*
 nginx/ssl/*
 !nginx/ssl/.gitkeep
 /nginx/nginx.dev.conf
-
+/docs
 test/nginx/ssl/*

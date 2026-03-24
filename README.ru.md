@@ -41,7 +41,17 @@
 
 **Локально (dev):** использовать `docker-compose.dev.yml`; приложение на `http://localhost:8080` (основной сайт — `/`, привычки — `/habits/`, API — `/habits-api/`).
 
+**Локальные webhook (Telegram и др.):** нужен туннель на публичный HTTPS — см. [docs/DEV_TUNNEL.ru.md](docs/DEV_TUNNEL.ru.md).
+
 **CI:** в `.github/workflows/deploy.yml` по push в `main`/`master` — SSH на сервер, pull всех четырёх репо, затем `docker-compose build && docker-compose up -d`.
+
+**n8n + Google integration:** см. `N8N_GOOGLE_INTEGRATION.ru.md`.
+**n8n + Telegram MVP:** см. `docs/TELEGRAM_MVP.ru.md`.
+**n8n + Telegram auto-connect (/start):** см. `docs/TELEGRAM_BIND_FLOW.ru.md`.
+**Telegram привязка — тест локально и прод (чеклист):** см. [docs/TELEGRAM_BIND_LOCAL_AND_PROD.ru.md](docs/TELEGRAM_BIND_LOCAL_AND_PROD.ru.md).
+**Прод на VPS, `.env`, SSL и cron:** см. [docs/PROD_VPS_CHECKLIST.ru.md](docs/PROD_VPS_CHECKLIST.ru.md).
+**n8n + Main Gateway (clean v2):** см. `docs/N8N_MAIN_GATEWAY.ru.md`.
+**Интеграции (полная схема и roadmap):** см. `docs/INTEGRATIONS_SYSTEM_GUIDE.ru.md`.
 
 ---
 
@@ -68,3 +78,34 @@ docker compose logs -f nginx
 # Или скрипт:
 ./deploy.sh
 ```
+
+---
+
+## Local vs Docker: сеть и env
+
+Если сервисы запущены в разных средах (часть в Docker, часть локально), адреса должны быть разными.
+
+| Откуда -> Куда | URL/Host | Пример переменной |
+|---|---|---|
+| Docker -> Docker (в одном `docker compose`) | имя сервиса | `REDIS_URL=redis://redis:6379` |
+| Local -> Docker | `localhost:published_port` | `REDIS_URL=redis://localhost:6379` |
+| Docker -> Local | `host.docker.internal:port` | `N8N -> nest-satellite: http://host.docker.internal:3001/...` |
+
+### Режим 1: всё в Docker (рекомендуется)
+
+- `n8n` обращается к `nest_satellite` по: `http://nest_satellite:3001/internal/notifications/send` и `.../internal/integrations/telegram/confirm` (прокси в Go)
+- `nest_satellite` к Go (habits-api): `HABITS_API_BASE_URL=http://habits_api:8080`
+- `nest_satellite` обращается к Redis по: `redis://redis:6379`
+- Ключ для внутреннего endpoint:
+  - `INTERNAL_NOTIFICATIONS_API_KEY` в `nest_satellite`
+  - тот же ключ в header `x-internal-api-key` в `n8n`
+
+### Режим 2: `nest-satellite` локально, `n8n` в Docker
+
+- `nest-satellite` локально:
+  - `REDIS_URL=redis://localhost:6379`
+  - `INTERNAL_NOTIFICATIONS_API_KEY=<same-key>`
+- В `n8n` URL для HTTP Request:
+  - `http://host.docker.internal:3001/internal/notifications/send`
+- Header:
+  - `x-internal-api-key: <same-key>`

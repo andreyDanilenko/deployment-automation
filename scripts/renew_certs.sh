@@ -3,16 +3,30 @@
 # ==============================================
 # ОСНОВНОЙ СКРИПТ ДЛЯ СЕРВЕРА С ОТПРАВКОЙ В TELEGRAM
 # ==============================================
+# Путь к каталогу deployment на VPS (где лежат docker-compose.yml и .env):
+#   export CERT_RENEW_PROJECT_DIR=/home/you/app/deployment
+# По умолчанию — как на вашем сервере; при необходимости поправьте или задайте env.
+# Требуется: docker compose v2 (`docker compose`) и certbot.
 
 # Пути
-PROJECT_DIR="/root/project/deployment"
+PROJECT_DIR="${CERT_RENEW_PROJECT_DIR:-/root/project/deployment}"
 SSL_DIR="$PROJECT_DIR/nginx/ssl"
 LOG_FILE="/var/log/cert_renewal.log"
+
+if docker compose version &>/dev/null 2>&1; then
+    DOCKER_COMPOSE=(docker compose)
+elif command -v docker-compose &>/dev/null; then
+    DOCKER_COMPOSE=(docker-compose)
+else
+    echo "Не найден ни 'docker compose', ни 'docker-compose'" >&2
+    exit 1
+fi
 
 # Домены
 DOMAINS=(
     "lifedream.tech"
     "habits.lifedream.tech"
+    "n8n.lifedream.tech"
 )
 
 # Email для Let's Encrypt
@@ -49,7 +63,7 @@ log "=== ЗАПУСК ОБНОВЛЕНИЯ СЕРТИФИКАТОВ ==="
 # 1. Останавливаем контейнеры
 log "Останавливаем Docker контейнеры..."
 cd "$PROJECT_DIR" || exit 1
-docker-compose down
+"${DOCKER_COMPOSE[@]}" down
 
 if [ $? -eq 0 ]; then
     log "✅ Контейнеры остановлены"
@@ -104,7 +118,7 @@ if [ $? -eq 0 ]; then
     
     # 4. Запускаем контейнеры
     log "Запускаем Docker контейнеры..."
-    docker-compose up -d
+    "${DOCKER_COMPOSE[@]}" up -d
     if [ $? -eq 0 ]; then
         log "✅ Контейнеры запущены"
     else

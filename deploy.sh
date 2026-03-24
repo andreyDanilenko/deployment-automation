@@ -11,7 +11,7 @@ if ! docker compose version &>/dev/null; then
 fi
 
 echo "=== Pulling latest images ==="
-docker compose pull habits_api habits_frontend nest_satellite article_app article_frontend
+docker compose pull habits_api habits_frontend nest_satellite article_app article_frontend n8n n8n_db nginx
 
 echo "=== Recreating containers ==="
 docker compose down

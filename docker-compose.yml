@@ -19,6 +19,7 @@ services:
   article_app:
     container_name: auth_service_app
     image: ${DOCKER_USERNAME}/go-angular-backend:latest
+    platform: linux/amd64
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -39,6 +40,10 @@ services:
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      TELEGRAM_USER_BOT_TOKEN: ${TELEGRAM_USER_BOT_TOKEN}
+      TELEGRAM_USER_BOT_USERNAME: ${TELEGRAM_USER_BOT_USERNAME}
+      INTERNAL_NOTIFICATIONS_API_KEY: ${INTERNAL_NOTIFICATIONS_API_KEY}
+      TELEGRAM_LINK_TOKEN_TTL: ${TELEGRAM_LINK_TOKEN_TTL:-15m}
       
       APP_ENV: ${APP_ENV}
     depends_on:
@@ -63,6 +68,19 @@ services:
     volumes:
       - habits_postgres_data:/var/lib/postgresql/data
 
+  n8n_db:
+    container_name: n8n_db
+    image: postgres:${POSTGRES_VERSION:-17.4}
+    environment:
+      POSTGRES_USER: ${N8N_DB_USER}
+      POSTGRES_PASSWORD: ${N8N_DB_PASSWORD}
+      POSTGRES_DB: ${N8N_DB_NAME}
+    restart: unless-stopped
+    networks:
+      - app-network
+    volumes:
+      - n8n_postgres_data:/var/lib/postgresql/data
+
   redis:
     image: redis:8-alpine
     container_name: habits_redis
@@ -73,12 +91,15 @@ services:
   nest_satellite:
     container_name: nest_satellite
     image: ${DOCKER_USERNAME}/nest-satellite:latest
+    platform: linux/amd64
     pull_policy: always
     restart: unless-stopped
     environment:
       PORT: 3001
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       JWT_SECRET_KEY: ${HABITS_JWT_SECRET}
+      INTERNAL_NOTIFICATIONS_API_KEY: ${INTERNAL_NOTIFICATIONS_API_KEY}
+      HABITS_API_BASE_URL: ${HABITS_API_BASE_URL:-http://habits_api:8080}
     depends_on:
       - redis
     networks:
@@ -89,6 +110,7 @@ services:
   habits_api:
     container_name: habits_api
     image: ${DOCKER_USERNAME}/habits-api:latest
+    platform: linux/amd64
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -120,6 +142,10 @@ services:
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+      TELEGRAM_USER_BOT_TOKEN: ${TELEGRAM_USER_BOT_TOKEN}
+      TELEGRAM_USER_BOT_USERNAME: ${TELEGRAM_USER_BOT_USERNAME}
+      INTERNAL_NOTIFICATIONS_API_KEY: ${INTERNAL_NOTIFICATIONS_API_KEY}
+      TELEGRAM_LINK_TOKEN_TTL: ${TELEGRAM_LINK_TOKEN_TTL:-15m}
     depends_on:
       - habits_db
       - redis
@@ -133,6 +159,7 @@ services:
   habits_frontend:
     container_name: habits_frontend
     image: ${DOCKER_USERNAME}/habits-client:latest
+    platform: linux/amd64
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -146,6 +173,7 @@ services:
   article_frontend:
     container_name: article_frontend
     image: ${DOCKER_USERNAME}/go-angular-frontend:latest
+    platform: linux/amd64
     pull_policy: always
     restart: unless-stopped
     environment:
@@ -155,6 +183,49 @@ services:
       - app-network
     expose:
       - "80"
+
+  n8n:
+    container_name: n8n
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678" 
+    environment:
+      N8N_PROTOCOL: ${N8N_PROTOCOL:-https}
+      N8N_HOST: ${N8N_HOST}
+      N8N_PORT: ${N8N_PORT:-5678}
+      N8N_LISTEN_ADDRESS: 0.0.0.0
+      N8N_EDITOR_BASE_URL: ${N8N_EDITOR_BASE_URL}
+      WEBHOOK_URL: ${WEBHOOK_URL}
+      N8N_PROXY_HOPS: ${N8N_PROXY_HOPS:-1}
+      GENERIC_TIMEZONE: ${GENERIC_TIMEZONE:-Europe/Madrid}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: ${N8N_DB_HOST:-n8n_db}
+      DB_POSTGRESDB_PORT: ${N8N_DB_PORT:-5432}
+      DB_POSTGRESDB_DATABASE: ${N8N_DB_NAME}
+      DB_POSTGRESDB_USER: ${N8N_DB_USER}
+      DB_POSTGRESDB_PASSWORD: ${N8N_DB_PASSWORD}
+      N8N_BASIC_AUTH_ACTIVE: ${N8N_BASIC_AUTH_ACTIVE:-true}
+      N8N_BASIC_AUTH_USER: ${N8N_BASIC_AUTH_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_BASIC_AUTH_PASSWORD}
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      # Уровень логов n8n: debug — видно входящие запросы; в проде можно N8N_LOG_LEVEL=info в .env
+      N8N_LOG_LEVEL: ${N8N_LOG_LEVEL:-debug}
+      INTERNAL_NOTIFICATIONS_API_KEY: ${INTERNAL_NOTIFICATIONS_API_KEY}
+      N8N_INTERNAL_NOTIFICATIONS_URL: ${N8N_INTERNAL_NOTIFICATIONS_URL:-http://nest_satellite:3001/internal/notifications/send}
+      # Полный URL: только Nest (n8n не вызывает Go напрямую).
+      TELEGRAM_LINK_CONFIRM_URL: ${TELEGRAM_LINK_CONFIRM_URL:-http://nest_satellite:3001/internal/integrations/telegram/confirm}
+      TELEGRAM_USER_BOT_TOKEN: ${TELEGRAM_USER_BOT_TOKEN}
+      TELEGRAM_USER_BOT_USERNAME: ${TELEGRAM_USER_BOT_USERNAME}
+      TELEGRAM_USER_CHAT_ID: ${TELEGRAM_USER_CHAT_ID}
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      - n8n_db
+    networks:
+      - app-network
+    expose:
+      - "5678"
 
   nginx:
     image: nginx:alpine
@@ -171,6 +242,7 @@ services:
       - nest_satellite
       - article_frontend
       - habits_frontend
+      - n8n
     restart: unless-stopped
     networks:               
       - app-network
@@ -186,3 +258,7 @@ volumes:
     name: deployment_habits_postgres_data
   habits_uploads_data:
     name: deployment_habits_uploads_data
+  n8n_postgres_data:
+    name: deployment_n8n_postgres_data
+  n8n_data:
+    name: deployment_n8n_data

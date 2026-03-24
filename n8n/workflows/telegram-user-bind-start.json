@@ -1,0 +1,266 @@
+{
+  "name": "Telegram User Bind via /start token",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "telegram-connect",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "Webhook_Telegram_Update",
+      "name": "Telegram Update Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nfor (const item of items) {\n  const b = item.json.body;\n  const m = b?.message;\n  const text = m?.text ?? '';\n  console.log(\n    '[telegram-bind] webhook → n8n OK | update_id=' +\n      (b?.update_id ?? '?') +\n      ' chat_id=' +\n      (m?.chat?.id ?? '?') +\n      ' text_preview=' +\n      JSON.stringify(text.slice(0, 72)),\n  );\n}\nreturn items;"
+      },
+      "id": "Log_Telegram_Webhook",
+      "name": "Log Webhook (stdout)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        340,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "text",
+              "value": "={{$json.body.message && $json.body.message.text ? $json.body.message.text : \"\"}}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{$json.body.message && $json.body.message.chat ? $json.body.message.chat.id : \"\"}}"
+            },
+            {
+              "name": "telegramUserId",
+              "value": "={{$json.body.message && $json.body.message.from ? $json.body.message.from.id : \"\"}}"
+            },
+            {
+              "name": "telegramUsername",
+              "value": "={{$json.body.message && $json.body.message.from ? $json.body.message.from.username : \"\"}}"
+            },
+            {
+              "name": "token",
+              "value": "={{ (($json.body.message && $json.body.message.text) || '').replace(/^\\/start\\s*/i, '').trim() }}"
+            }
+          ]
+        }
+      },
+      "id": "Set_Parsed_Input",
+      "name": "Parse Telegram Message",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        500,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.text || ''}}",
+              "operation": "startsWith",
+              "value2": "/start"
+            },
+            {
+              "value1": "={{$json.token}}",
+              "operation": "notEmpty"
+            }
+          ]
+        }
+      },
+      "id": "If_Start_With_Token",
+      "name": "Is /start with token?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        710,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.TELEGRAM_LINK_CONFIRM_URL}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-api-key",
+              "value": "={{$env.INTERNAL_NOTIFICATIONS_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"token\": $json.token, \"chatId\": String($json.chatId), \"telegramUserId\": String($json.telegramUserId), \"telegramUsername\": $json.telegramUsername || \"\"} }}",
+        "options": {}
+      },
+      "id": "HTTP_Confirm_Link",
+      "name": "Confirm Link in API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        970,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_USER_BOT_TOKEN}}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"chat_id\": $node[\"Parse Telegram Message\"].json.chatId, \"text\": \"Telegram подключен к вашему аккаунту. Теперь уведомления включены.\"} }}",
+        "options": {}
+      },
+      "id": "HTTP_Send_Success",
+      "name": "Telegram Success Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1210,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.telegram.org/bot{{$env.TELEGRAM_USER_BOT_TOKEN}}/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\"chat_id\": $json.chatId, \"text\": \"Откройте ссылку «Подключить Telegram» в ERP — не пишите /start вручную. Ссылка уже содержит токен.\"} }}",
+        "options": {}
+      },
+      "id": "HTTP_Send_Help",
+      "name": "Telegram Help Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        970,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\"ok\": true} }}",
+        "options": {}
+      },
+      "id": "Respond_200",
+      "name": "Respond 200",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1450,
+        260
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Update Webhook": {
+      "main": [
+        [
+          {
+            "node": "Log Webhook (stdout)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Webhook (stdout)": {
+      "main": [
+        [
+          {
+            "node": "Parse Telegram Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Is /start with token?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is /start with token?": {
+      "main": [
+        [
+          {
+            "node": "Confirm Link in API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Telegram Help Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Confirm Link in API": {
+      "main": [
+        [
+          {
+            "node": "Telegram Success Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Success Message": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Help Message": {
+      "main": [
+        [
+          {
+            "node": "Respond 200",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "id": "TELEGRAM_BIND_START",
+  "tags": []
+}

@@ -42,6 +42,10 @@ This repo deploys **two applications** behind one Nginx.
 
 **Dev (local):** use `docker-compose.dev.yml`; app is on `http://localhost:8080` (main site at `/`, habits at `/habits/`, API at `/habits-api/`).
 
+**Local webhooks (Telegram, etc.):** use a tunnel to public HTTPS — see [docs/DEV_TUNNEL.ru.md](docs/DEV_TUNNEL.ru.md) (Russian, short).
+
+**Telegram bind — local + prod checklist (Russian):** [docs/TELEGRAM_BIND_LOCAL_AND_PROD.ru.md](docs/TELEGRAM_BIND_LOCAL_AND_PROD.ru.md).
+
 **CI:** `.github/workflows/deploy.yml` — on push to `main`/`master` it SSHs to the server, pulls all four repos, then `docker-compose build && docker-compose up -d`.
 
 ---
@@ -69,3 +73,34 @@ docker compose logs -f nginx
 # Или скрипт:
 ./deploy.sh
 ```
+
+---
+
+## Local vs Docker: network and env
+
+If services run in different environments (some in Docker, some local), hosts must differ.
+
+| From -> To | URL/Host | Env example |
+|---|---|---|
+| Docker -> Docker (same `docker compose`) | service name | `REDIS_URL=redis://redis:6379` |
+| Local -> Docker | `localhost:published_port` | `REDIS_URL=redis://localhost:6379` |
+| Docker -> Local | `host.docker.internal:port` | `N8N -> nest-satellite: http://host.docker.internal:3001/...` |
+
+### Mode 1: all in Docker (recommended)
+
+- `n8n` calls `nest_satellite`: `http://nest_satellite:3001/internal/notifications/send` and `.../internal/integrations/telegram/confirm` (Nest proxies to Go)
+- `nest_satellite` to habits-api (Go): `HABITS_API_BASE_URL=http://habits_api:8080`
+- `nest_satellite` calls Redis: `redis://redis:6379`
+- Internal endpoint key:
+  - `INTERNAL_NOTIFICATIONS_API_KEY` in `nest_satellite`
+  - same key in `n8n` header `x-internal-api-key`
+
+### Mode 2: `nest-satellite` local, `n8n` in Docker
+
+- `nest-satellite` locally:
+  - `REDIS_URL=redis://localhost:6379`
+  - `INTERNAL_NOTIFICATIONS_API_KEY=<same-key>`
+- In `n8n`, HTTP Request URL:
+  - `http://host.docker.internal:3001/internal/notifications/send`
+- Header:
+  - `x-internal-api-key: <same-key>`
