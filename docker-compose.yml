@@ -100,6 +100,9 @@ services:
       JWT_SECRET_KEY: ${HABITS_JWT_SECRET}
       INTERNAL_NOTIFICATIONS_API_KEY: ${INTERNAL_NOTIFICATIONS_API_KEY}
       HABITS_API_BASE_URL: ${HABITS_API_BASE_URL:-http://habits_api:8080}
+      N8N_GATEWAY_WEBHOOK_URL: ${N8N_GATEWAY_WEBHOOK_URL:-http://n8n:5678/webhook/gateway/events}
+      N8N_GATEWAY_SECRET: ${N8N_GATEWAY_SECRET}
+      HABITS_APP_PUBLIC_URL: ${HABITS_APP_PUBLIC_URL:-}
     depends_on:
       - redis
     networks:
@@ -137,7 +140,6 @@ services:
       REGISTRATION_TOKEN_LIFETIME: ${REGISTRATION_TOKEN_LIFETIME:-24h}
       VERIFICATION_BASE_URL: ${VERIFICATION_BASE_URL:-http://localhost:3000}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      # Явный каталог; тот же путь в volume — файлы переживают пересборку образа
       UPLOADS_DIR: /app/uploads
       # Telegram
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}

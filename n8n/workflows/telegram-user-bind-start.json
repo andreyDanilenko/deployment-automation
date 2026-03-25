@@ -70,31 +70,43 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "string": [
-            {
-              "value1": "={{$json.text || ''}}",
-              "operation": "startsWith",
-              "value2": "/start"
-            },
-            {
-              "value1": "={{$json.token}}",
-              "operation": "notEmpty"
-            }
-          ]
-        }
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nreturn items.map((item) => {\n  const j = item.json;\n  const text = String(j.text ?? '');\n  let token = String(j.token ?? '').trim();\n  if (!token && text) {\n    token = text.replace(/^\\/start\\s*/i, '').trim();\n  }\n  const isStart = /^\\/start\\b/i.test(text);\n  const branch = isStart && token.length > 0 ? 'confirm' : 'help';\n  return { json: { ...j, token, branch } };\n});"
       },
-      "id": "If_Start_With_Token",
-      "name": "Is /start with token?",
-      "type": "n8n-nodes-base.if",
+      "id": "Gate_Link_Branch",
+      "name": "Gate: /start + token (AND)",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        710,
+        620,
         260
       ]
     },
     {
       "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.branch}}",
+              "operation": "equal",
+              "value2": "confirm"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "If_Start_With_Token",
+      "name": "Route confirm?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        780,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
         "url": "={{$env.TELEGRAM_LINK_CONFIRM_URL}}",
         "sendHeaders": true,
         "headerParameters": {
@@ -197,14 +209,25 @@
       "main": [
         [
           {
-            "node": "Is /start with token?",
+            "node": "Gate: /start + token (AND)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Is /start with token?": {
+    "Gate: /start + token (AND)": {
+      "main": [
+        [
+          {
+            "node": "Route confirm?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route confirm?": {
       "main": [
         [
           {
@@ -256,7 +279,7 @@
       ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   },

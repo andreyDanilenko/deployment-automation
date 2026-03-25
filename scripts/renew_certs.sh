@@ -1,10 +1,15 @@
 #!/bin/bash
 
 # ==============================================
-# ОСНОВНОЙ СКРИПТ ДЛЯ СЕРВЕРА С ОТПРАВКОЙ В TELEGRAM
+# Let's Encrypt (certbot --standalone) + Telegram
+# Перед выпуском: docker compose down, порт 80 свободен для certbot.
+#
+# Если n8n.lifedream.tech в DNS указывает на Beget/другой хост (страница
+# «домен не прилинкован»), LE не дойдёт до этого сервера. Пока не поправите
+# A-запись n8n → IP этого VPS, запускайте с:
+#   RENEW_CERT_SKIP_N8N=1 /path/to/renew_certs.sh
 # ==============================================
 
-# Пути
 PROJECT_DIR="${CERT_RENEW_PROJECT_DIR:-/root/project/deployment}"
 SSL_DIR="$PROJECT_DIR/nginx/ssl"
 LOG_FILE="/var/log/cert_renewal.log"
@@ -18,28 +23,27 @@ else
     exit 1
 fi
 
-# Домены
 DOMAINS=(
     "lifedream.tech"
     "habits.lifedream.tech"
     "n8n.lifedream.tech"
 )
 
-# Email для Let's Encrypt
+if [ "${RENEW_CERT_SKIP_N8N:-0}" = "1" ]; then
+    DOMAINS=("lifedream.tech" "habits.lifedream.tech")
+fi
+
 EMAIL="danilenko.a.g@mail.ru"
 
-# Функция логирования
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" | tee -a "$LOG_FILE"
 }
 
-# Загружаем переменные из .env
 if [ -f "$PROJECT_DIR/.env" ]; then
     export $(grep -v '^#' "$PROJECT_DIR/.env" | xargs)
     log "✅ Переменные окружения загружены"
 fi
 
-# Функция отправки в Telegram
 send_telegram() {
     local message="$1"
     if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
@@ -53,17 +57,15 @@ send_telegram() {
     fi
 }
 
-# Функция проверки существования сертификата для домена
 cert_exists() {
     local domain="$1"
     [ -f "$SSL_DIR/config/live/$domain/fullchain.pem" ] && \
     [ -f "$SSL_DIR/config/live/$domain/privkey.pem" ]
 }
 
-# Функция получения сертификата для домена (первый выпуск / после удаления live)
 get_certificate() {
     local domain="$1"
-    log "Выпускаем сертификат (certonly) для $domain"
+    log "Выпускаем сертификат (certonly --standalone) для $domain"
     if certbot certonly --standalone \
         -d "$domain" \
         --config-dir "$SSL_DIR/config" \
@@ -79,22 +81,17 @@ get_certificate() {
     return 1
 }
 
-# Начало
-log "=== ЗАПУСК ОБНОВЛЕНИЯ СЕРТИФИКАТОВ ==="
+log "=== ЗАПУСК ОБНОВЛЕНИЯ СЕРТИФИКАТОВ (standalone) ==="
 
-# 1. Останавливаем контейнеры
-log "Останавливаем Docker контейнеры..."
 cd "$PROJECT_DIR" || exit 1
-"${DOCKER_COMPOSE[@]}" down
 
-if [ $? -ne 0 ]; then
+log "Останавливаем Docker контейнеры..."
+if ! "${DOCKER_COMPOSE[@]}" down; then
     log "❌ Ошибка при остановке контейнеров"
     exit 1
 fi
-
 log "✅ Контейнеры остановлены"
 
-# 2. Для каждого домена: нет в certbot live → certonly; хотя бы один уже есть → renew для продления
 HAS_LIVE_CERT=false
 ISSUE_FAILED=false
 for DOMAIN in "${DOMAINS[@]}"; do
@@ -109,9 +106,8 @@ for DOMAIN in "${DOMAINS[@]}"; do
     fi
 done
 
-# 3. Продление только если в хранилище уже были какие-то сертификаты (renew бессмысленен при пустом каталоге)
 if [ "$HAS_LIVE_CERT" = true ]; then
-    log "🔄 Certbot renew (продление уже существующих)..."
+    log "🔄 Certbot renew (продление)..."
     if certbot renew --standalone \
         --config-dir "$SSL_DIR/config" \
         --work-dir "$SSL_DIR/work" \
@@ -119,11 +115,10 @@ if [ "$HAS_LIVE_CERT" = true ]; then
         --non-interactive; then
         log "✅ certbot renew завершён"
     else
-        log "⚠️ certbot renew завершился с ошибкой (новые certonly выше могли пройти успешно)"
+        log "⚠️ certbot renew завершился с ошибкой"
     fi
 fi
 
-# 4. Копируем fullchain/privkey в имена, которые ждёт nginx.conf
 log "Копируем сертификаты в $SSL_DIR (*.crt / *.key)..."
 MISSING_AFTER_COPY=0
 for DOMAIN in "${DOMAINS[@]}"; do
@@ -132,38 +127,27 @@ for DOMAIN in "${DOMAINS[@]}"; do
         cp "$SSL_DIR/config/live/$DOMAIN/privkey.pem" "$SSL_DIR/$DOMAIN.key"
         log "✅ $DOMAIN: скопировано для Nginx"
     else
-        log "❌ $DOMAIN: нет fullchain.pem в Certbot после выпуска"
+        log "❌ $DOMAIN: нет fullchain.pem в Certbot"
         MISSING_AFTER_COPY=$((MISSING_AFTER_COPY + 1))
     fi
 done
 
-# 5. Запуск только если все три пары файлов на месте — иначе nginx уйдёт в Restarting из‑за ssl_certificate
 if [ "$MISSING_AFTER_COPY" -gt 0 ] || [ "$ISSUE_FAILED" = true ]; then
-    log "❌ SSL неполный — docker compose up не выполняем (почините Certbot, затем: cd $PROJECT_DIR && docker compose up -d)"
-    REPORT_FAIL="⚠️ <b>renew_certs.sh: ошибка SSL</b>\n"
-    REPORT_FAIL+="🖥 $(hostname)\n"
-    REPORT_FAIL+="Не хватает сертификатов или certonly упал. См. $LOG_FILE\n"
-    REPORT_FAIL+="Контейнеры остановлены (compose down) — поднимите вручную после исправления."
+    log "❌ SSL неполный — compose up не выполняем. Для n8n: DNS A → IP VPS (не Beget). Временно: RENEW_CERT_SKIP_N8N=1"
+    REPORT_FAIL="⚠️ <b>renew_certs.sh: ошибка SSL</b>\n🖥 $(hostname)\nСм. $LOG_FILE\nЕсли n8n на Beget — сначала A-запись на этот сервер или SKIP_N8N."
     send_telegram "$REPORT_FAIL"
     exit 1
 fi
 
 log "Запускаем Docker контейнеры..."
-"${DOCKER_COMPOSE[@]}" up -d
-if [ $? -eq 0 ]; then
-    log "✅ Контейнеры запущены"
-else
+if ! "${DOCKER_COMPOSE[@]}" up -d; then
     log "❌ Ошибка при запуске контейнеров"
     exit 1
 fi
-
-# ==============================================
-# ОТПРАВКА ОТЧЕТА В TELEGRAM
-# ==============================================
+log "✅ Контейнеры запущены"
 
 log "Формируем отчет о сертификатах..."
 
-# Формируем отчет
 REPORT="📊 <b>Еженедельный отчет о SSL-сертификатах</b>\n"
 REPORT+="📅 $(date '+%d.%m.%Y %H:%M')\n"
 REPORT+="🖥 Сервер: $(hostname)\n"
@@ -171,15 +155,11 @@ REPORT+="─────────────────────\n\n"
 
 for DOMAIN in "${DOMAINS[@]}"; do
     if [ -f "$SSL_DIR/$DOMAIN.crt" ]; then
-        # Получаем дату истечения
         EXPIRY=$(openssl x509 -in "$SSL_DIR/$DOMAIN.crt" -noout -enddate | cut -d= -f2)
-        
-        # Считаем сколько дней осталось
         EXPIRY_SEC=$(date -d "$EXPIRY" +%s)
         NOW_SEC=$(date +%s)
-        DAYS_LEFT=$(( ($EXPIRY_SEC - $NOW_SEC) / 86400 ))
-        
-        # Выбираем эмодзи в зависимости от срока
+        DAYS_LEFT=$(( ($EXPIRY_SEC - NOW_SEC) / 86400 ))
+
         if [ $DAYS_LEFT -lt 30 ]; then
             STATUS="🔴 <b>СКОРО ИСТЕКАЕТ!</b>"
         elif [ $DAYS_LEFT -lt 60 ]; then
@@ -187,7 +167,7 @@ for DOMAIN in "${DOMAINS[@]}"; do
         else
             STATUS="🟢 Более 60 дней"
         fi
-        
+
         REPORT+="🔑 <b>$DOMAIN</b>\n"
         REPORT+="   📅 Истекает: $EXPIRY\n"
         REPORT+="   ⏳ Осталось: $DAYS_LEFT дней\n"
@@ -197,12 +177,10 @@ for DOMAIN in "${DOMAINS[@]}"; do
     fi
 done
 
-# Добавляем информацию о последнем обновлении
 REPORT+="─────────────────────\n"
 REPORT+="🔄 Последнее обновление: $(date '+%d.%m.%Y %H:%M')\n"
-REPORT+="✅ Скрипт выполнен успешно (все домены на месте, compose up выполнен)"
+REPORT+="✅ Standalone + compose up выполнены"
 
-# Отправляем отчет
 send_telegram "$REPORT"
 
 log "=== ОБНОВЛЕНИЕ ЗАВЕРШЕНО ==="
